@@ -82,19 +82,18 @@ create policy "participants read agreements" on public.agreements
 for select to authenticated using (public.is_agreement_participant(id));
 create policy "signed-in users create agreements" on public.agreements
 for insert to authenticated with check (owner_id = auth.uid());
-create policy "participants update agreements" on public.agreements
-for update to authenticated using (public.is_agreement_participant(id))
-with check (public.is_agreement_participant(id));
+-- Agreements are intentionally not editable after creation; changes must be proposed as amendments.
 
 create policy "participants read membership" on public.agreement_participants
 for select to authenticated using (public.is_agreement_participant(agreement_id));
+drop policy if exists "owner adds self as participant" on public.agreement_participants;
 create policy "owner adds self as participant" on public.agreement_participants
 for insert to authenticated with check (
-  user_id = auth.uid() and (
-    role = 'owner' or exists (
-      select 1 from public.agreements a
-      where a.id = agreement_id and a.invite_code::text = current_setting('request.jwt.claims', true)::json->>'invite_code'
-    )
+  user_id = auth.uid()
+  and role = 'owner'
+  and exists (
+    select 1 from public.agreements a
+    where a.id = agreement_id and a.owner_id = auth.uid()
   )
 );
 
