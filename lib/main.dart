@@ -1,425 +1,59 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:signature/signature.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-void main() => runApp(const DealProofApp());
-
-class DealProofApp extends StatelessWidget {
-  const DealProofApp({super.key});
-
-  @override
-  Widget build(BuildContext context) => MaterialApp(
-        title: 'DEALPROOF',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF16A6A0),
-            brightness: Brightness.dark,
-          ),
-          scaffoldBackgroundColor: const Color(0xFF101719),
-          cardTheme: CardThemeData(
-            color: const Color(0xFF1A2427),
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-            ),
-          ),
-          inputDecorationTheme: InputDecorationTheme(
-            filled: true,
-            fillColor: const Color(0xFF1A2427),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-        home: const DealsPage(),
-      );
+const supaUrl=String.fromEnvironment('SUPABASE_URL');
+const supaKey=String.fromEnvironment('SUPABASE_ANON_KEY');
+Future<void> main() async {
+ WidgetsFlutterBinding.ensureInitialized();
+ if(supaUrl.startsWith('https://')&&supaKey.isNotEmpty) await Supabase.initialize(url:supaUrl,anonKey:supaKey);
+ runApp(const App());
 }
-
-class Deal {
-  Deal({
-    required this.title,
-    required this.otherParty,
-    required this.description,
-    required this.amount,
-  });
-
-  final String title;
-  final String otherParty;
-  final String description;
-  final String amount;
-  final DateTime createdAt = DateTime.now();
-  final List<Amendment> amendments = [];
-  bool confirmedByMe = false;
-  bool confirmedByOther = false;
+class App extends StatelessWidget {
+ const App({super.key});
+ @override Widget build(BuildContext c)=>MaterialApp(title:'DEALPROOF',debugShowCheckedModeBanner:false,
+ theme:ThemeData(useMaterial3:true,colorScheme:ColorScheme.fromSeed(seedColor:const Color(0xff16a6a0),brightness:Brightness.dark),scaffoldBackgroundColor:const Color(0xff101719)),
+ home:supaUrl.startsWith('https://')&&supaKey.isNotEmpty?const Gate():const Scaffold(body:Center(child:Padding(padding:EdgeInsets.all(24),child:Text('DEALPROOF potřebuje nastavit cloud Supabase. Nejprve vytvoříme cloudový projekt a připojíme jej přes GitHub Secrets.',textAlign:TextAlign.center)))));
 }
-
-class Amendment {
-  Amendment(this.description, this.priceChange)
-      : proposedAt = DateTime.now();
-
-  final String description;
-  final String priceChange;
-  final DateTime proposedAt;
-  String status = 'Čeká na odpověď';
+class Gate extends StatelessWidget {
+ const Gate({super.key});
+ @override Widget build(BuildContext c)=>StreamBuilder<AuthState>(stream:Supabase.instance.client.auth.onAuthStateChange,builder:(c,s)=>Supabase.instance.client.auth.currentSession==null?const LoginPage():const HomePage());
 }
-
-class DealsPage extends StatefulWidget {
-  const DealsPage({super.key});
-
-  @override
-  State<DealsPage> createState() => _DealsPageState();
+class LoginPage extends StatefulWidget {const LoginPage({super.key});@override State<LoginPage> createState()=>_LoginState();}
+class _LoginState extends State<LoginPage>{
+ final email=TextEditingController(),pass=TextEditingController(),name=TextEditingController();bool signup=false,busy=false;String error='';
+ Future<void> submit() async {setState(()=>busy=true);try{final a=Supabase.instance.client.auth;if(signup){final r=await a.signUp(email:email.text.trim(),password:pass.text);if(r.user!=null&&r.session!=null)await Supabase.instance.client.from('profiles').upsert({'id':r.user!.id,'display_name':name.text.trim()});if(r.session==null)error='Potvrď registrační e-mail a potom se přihlas.';}else{await a.signInWithPassword(email:email.text.trim(),password:pass.text);}}catch(e){error=e.toString();}if(mounted)setState(()=>busy=false);}
+ @override Widget build(BuildContext c)=>Scaffold(appBar:AppBar(title:const Text('DEALPROOF')),body:ListView(padding:const EdgeInsets.all(22),children:[const Icon(Icons.handshake_outlined,size:58,color:Colors.tealAccent),Text(signup?'Registrace':'Přihlášení',style:Theme.of(c).textTheme.headlineMedium),if(signup)TextField(controller:name,decoration:const InputDecoration(labelText:'Jméno')),TextField(controller:email,decoration:const InputDecoration(labelText:'E-mail')),TextField(controller:pass,obscureText:true,decoration:const InputDecoration(labelText:'Heslo')),if(error.isNotEmpty)Text(error),FilledButton(onPressed:busy?null:submit,child:Text(signup?'Zaregistrovat':'Přihlásit')),TextButton(onPressed:()=>setState(()=>signup=!signup),child:Text(signup?'Mám účet':'Vytvořit účet'))]));}
+class HomePage extends StatefulWidget {const HomePage({super.key});@override State<HomePage> createState()=>_HomeState();}
+class _HomeState extends State<HomePage>{
+ final db=Supabase.instance.client;List<Map<String,dynamic>> items=[];bool busy=true;
+ @override void initState(){super.initState();load();}
+ Future<void> load() async {try{items=List<Map<String,dynamic>>.from(await db.from('agreements').select().order('created_at',ascending:false));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}if(mounted)setState(()=>busy=false);}
+ Future<void> create() async {final t=TextEditingController(),d=TextEditingController(),a=TextEditingController();final ok=await showDialog<bool>(context:context,builder:(c)=>AlertDialog(title:const Text('Nová dohoda'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:t,decoration:const InputDecoration(labelText:'Název')),TextField(controller:d,decoration:const InputDecoration(labelText:'Podmínky'),minLines:2,maxLines:4),TextField(controller:a,decoration:const InputDecoration(labelText:'Cena'))]),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('Zrušit')),FilledButton(onPressed:()=>Navigator.pop(c,t.text.trim().isNotEmpty),child:const Text('Vytvořit'))]));if(ok==true){try{final u=db.auth.currentUser!;final r=await db.from('agreements').insert({'title':t.text.trim(),'description':d.text.trim(),'amount':a.text.trim(),'owner_id':u.id}).select().single();await db.from('agreement_participants').insert({'agreement_id':r['id'],'user_id':u.id,'display_name':u.email??'','role':'owner'});await load();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}}t.dispose();d.dispose();a.dispose();}
+ Future<void> join() async {final code=TextEditingController();final ok=await showDialog<bool>(context:context,builder:(c)=>AlertDialog(title:const Text('Přijmout pozvánku'),content:TextField(controller:code,decoration:const InputDecoration(labelText:'Kód pozvánky')),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('Zrušit')),FilledButton(onPressed:()=>Navigator.pop(c,true),child:const Text('Připojit'))]));if(ok==true){try{await db.rpc('join_agreement_by_code',params:{'code':code.text.trim(),'participant_name':db.auth.currentUser?.email??''});await load();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}}code.dispose();}
+ @override Widget build(BuildContext c)=>Scaffold(appBar:AppBar(title:const Text('DEALPROOF'),actions:[IconButton(onPressed:join,icon:const Icon(Icons.link)),IconButton(onPressed:()=>db.auth.signOut(),icon:const Icon(Icons.logout))]),floatingActionButton:FloatingActionButton.extended(onPressed:create,icon:const Icon(Icons.add),label:const Text('Nová dohoda')),body:busy?const Center(child:CircularProgressIndicator()):items.isEmpty?const Center(child:Text('Vytvoř dohodu nebo přijmi pozvánku.')):RefreshIndicator(onRefresh:load,child:ListView.builder(itemCount:items.length,itemBuilder:(c,i){final x=items[i];return Card(child:ListTile(title:Text(x['title']??''),subtitle:Text(x['amount']??''),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>DealPage(deal:x))).then((_)=>load())));})));
 }
-
-class _DealsPageState extends State<DealsPage> {
-  final List<Deal> deals = [];
-
-  Future<void> createDeal() async {
-    final deal = await Navigator.push<Deal>(
-      context,
-      MaterialPageRoute(builder: (_) => const CreateDealPage()),
-    );
-    if (deal != null && mounted) setState(() => deals.insert(0, deal));
-  }
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-          title: const Text('DEALPROOF',
-              style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 1.2)),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.info_outline),
-              onPressed: () => showAboutDialog(
-                context: context,
-                applicationName: 'DEALPROOF',
-                applicationVersion: '0.1.0',
-                children: const [
-                  Text('První prototyp. Cloudové účty a sdílení budou doplněny.'),
-                ],
-              ),
-            ),
-          ],
-        ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: createDeal,
-          icon: const Icon(Icons.add),
-          label: const Text('Nová dohoda'),
-        ),
-        body: deals.isEmpty
-            ? Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(28),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.handshake_outlined,
-                          size: 64, color: Color(0xFF16A6A0)),
-                      const SizedBox(height: 18),
-                      const Text(
-                        'Dohody přehledně a na jednom místě',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Zaznamenej, na čem jste se domluvili.',
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 20),
-                      FilledButton.icon(
-                        onPressed: createDeal,
-                        icon: const Icon(Icons.add),
-                        label: const Text('Vytvořit dohodu'),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            : ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-                itemCount: deals.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 10),
-                itemBuilder: (context, index) {
-                  final deal = deals[index];
-                  return Card(
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.all(16),
-                      title: Text(deal.title,
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Padding(
-                        padding: const EdgeInsets.only(top: 7),
-                        child: Text(
-                          'Druhá strana: ${deal.otherParty}\n'
-                          '${deal.amount.isEmpty ? 'Cena neuvedena' : deal.amount}',
-                        ),
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => DealDetailPage(deal: deal),
-                        ),
-                      ).then((_) => setState(() {})),
-                    ),
-                  );
-                },
-              ),
-      );
-}
-
-class CreateDealPage extends StatefulWidget {
-  const CreateDealPage({super.key});
-
-  @override
-  State<CreateDealPage> createState() => _CreateDealPageState();
-}
-
-class _CreateDealPageState extends State<CreateDealPage> {
-  final formKey = GlobalKey<FormState>();
-  final title = TextEditingController();
-  final otherParty = TextEditingController();
-  final description = TextEditingController();
-  final amount = TextEditingController();
-
-  @override
-  void dispose() {
-    title.dispose();
-    otherParty.dispose();
-    description.dispose();
-    amount.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Nová dohoda')),
-        body: Form(
-          key: formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              TextFormField(
-                controller: title,
-                decoration: const InputDecoration(labelText: 'Název dohody *'),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Vyplň název dohody' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: otherParty,
-                decoration: const InputDecoration(labelText: 'Druhá strana *'),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Vyplň druhou stranu' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: amount,
-                decoration: const InputDecoration(
-                    labelText: 'Cena / částka (nepovinné)'),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: description,
-                minLines: 4,
-                maxLines: 7,
-                decoration: const InputDecoration(
-                  labelText: 'Popis podmínek a rozsahu',
-                  alignLabelWithHint: true,
-                ),
-              ),
-              const SizedBox(height: 22),
-              FilledButton.icon(
-                onPressed: () {
-                  if (!formKey.currentState!.validate()) return;
-                  Navigator.pop(
-                    context,
-                    Deal(
-                      title: title.text.trim(),
-                      otherParty: otherParty.text.trim(),
-                      description: description.text.trim(),
-                      amount: amount.text.trim(),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.save_outlined),
-                label: const Text('Uložit dohodu'),
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                'Prototyp zatím ukládá data pouze do paměti. Po restartu aplikace zmizí a druhá strana je neuvidí.',
-              ),
-            ],
-          ),
-        ),
-      );
-}
-
-class DealDetailPage extends StatefulWidget {
-  const DealDetailPage({super.key, required this.deal});
-  final Deal deal;
-
-  @override
-  State<DealDetailPage> createState() => _DealDetailPageState();
-}
-
-class _DealDetailPageState extends State<DealDetailPage> {
-  Future<void> proposeAmendment() async {
-    final description = TextEditingController();
-    final price = TextEditingController();
-    final add = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Navrhnout dodatek'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: description,
-              minLines: 2,
-              maxLines: 4,
-              decoration: const InputDecoration(labelText: 'Co se má změnit?'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: price,
-              decoration: const InputDecoration(
-                  labelText: 'Změna ceny (nepovinné)'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Zrušit'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(
-              dialogContext,
-              description.text.trim().isNotEmpty,
-            ),
-            child: const Text('Přidat návrh'),
-          ),
-        ],
-      ),
-    );
-    if (add == true && mounted) {
-      setState(() => widget.deal.amendments.add(
-            Amendment(description.text.trim(), price.text.trim()),
-          ));
-    }
-    description.dispose();
-    price.dispose();
-  }
-
-  String date(DateTime d) =>
-      '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
-
-  @override
-  Widget build(BuildContext context) {
-    final deal = widget.deal;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Detail dohody')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: proposeAmendment,
-        icon: const Icon(Icons.edit_note),
-        label: const Text('Navrhnout dodatek'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-        children: [
-          Text(deal.title,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 6),
-          Text('Druhá strana: ${deal.otherParty}'),
-          const SizedBox(height: 16),
-          _Section(
-            title: 'Původní dohoda',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(deal.description.isEmpty
-                    ? 'Bez podrobného popisu.'
-                    : deal.description),
-                const SizedBox(height: 8),
-                Text('Částka: ${deal.amount.isEmpty ? 'neuvedena' : deal.amount}'),
-                Text('Vytvořeno: ${date(deal.createdAt)}'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          _Section(
-            title: 'Potvrzení účastníků',
-            child: Column(
-              children: [
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: deal.confirmedByMe,
-                  title: const Text('Potvrzuji za sebe'),
-                  onChanged: (v) =>
-                      setState(() => deal.confirmedByMe = v ?? false),
-                ),
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: deal.confirmedByOther,
-                  title: const Text('Potvrzení druhé strany – ukázka'),
-                  subtitle: const Text(
-                      'V tomto prototypu může stav změnit jen toto zařízení.'),
-                  onChanged: (v) =>
-                      setState(() => deal.confirmedByOther = v ?? false),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          _Section(
-            title: 'Historie dodatků',
-            child: deal.amendments.isEmpty
-                ? const Text('Zatím nebyl navržen žádný dodatek.')
-                : Column(
-                    children: deal.amendments.map((a) {
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.history),
-                        title: Text(a.description),
-                        subtitle: Text(
-                          '${date(a.proposedAt)} • ${a.status}'
-                          '${a.priceChange.isEmpty ? '' : '\nZměna ceny: ${a.priceChange}'}',
-                        ),
-                      );
-                    }).toList(),
-                  ),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Dodatek je pouze lokální návrh. Původní dohoda se nepřepisuje. '
-            'Schválení druhou stranou a neměnná cloudová historie budou doplněny později.',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.child});
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 10),
-              child,
-            ],
-          ),
-        ),
-      );
+class DealPage extends StatefulWidget {const DealPage({super.key,required this.deal});final Map<String,dynamic> deal;@override State<DealPage> createState()=>_DealState();}
+class _DealState extends State<DealPage>{
+ final db=Supabase.instance.client;List<Map<String,dynamic>> signatures=[],amendments=[];bool loading=true;
+ String get id=>widget.deal['id'].toString();
+ String get terms=>(widget.deal['title']??'').toString()+'\n'+(widget.deal['description']??'').toString()+'\n'+(widget.deal['amount']??'').toString();
+ String get hash=>sha256.convert(utf8.encode(terms)).toString();
+ @override void initState(){super.initState();refresh();}
+ Future<void> refresh() async {try{signatures=List<Map<String,dynamic>>.from(await db.from('agreement_signatures').select().eq('agreement_id',id));amendments=List<Map<String,dynamic>>.from(await db.from('amendments').select().eq('agreement_id',id).order('proposed_at',ascending:false));}catch(_){}if(mounted)setState(()=>loading=false);}
+ Future<void> invite() async {final code=widget.deal['invite_code'].toString();await showDialog<void>(context:context,builder:(c)=>AlertDialog(title:const Text('Sdílet dohodu'),content:Column(mainAxisSize:MainAxisSize.min,children:[const Text('Druhá osoba zadá tento kód v aplikaci přes ikonu odkazu.'),SelectableText(code),QrImageView(data:code,size:170,backgroundColor:Colors.white)]),actions:[TextButton(onPressed:(){Navigator.pop(c);SharePlus.instance.share(ShareParams(text:'Pozvánka do DEALPROOF. Kód: '+code));},child:const Text('Sdílet kód')),FilledButton(onPressed:()=>Navigator.pop(c),child:const Text('Zavřít'))]));}
+ Future<void> sign() async {final n=TextEditingController();final pen=SignatureController(penStrokeWidth:3,penColor:Colors.white,exportBackgroundColor:const Color(0xff202a2d));final ok=await showDialog<bool>(context:context,builder:(c)=>AlertDialog(title:const Text('Podepsat dohodu'),content:SizedBox(width:330,child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:n,decoration:const InputDecoration(labelText:'Jméno')),const SizedBox(height:10),Container(height:150,color:const Color(0xff202a2d),child:Signature(controller:pen,backgroundColor:const Color(0xff202a2d))),TextButton(onPressed:pen.clear,child:const Text('Vymazat podpis')),const Text('Podpis prstem není automaticky kvalifikovaný elektronický podpis.',style:TextStyle(fontSize:12))])),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('Zrušit')),FilledButton(onPressed:()=>Navigator.pop(c,true),child:const Text('Potvrdit'))]));if(ok==true){try{if(n.text.trim().isEmpty||pen.isEmpty)throw Exception('Vyplň jméno a podpis.');final png=await pen.toPngBytes();if(png==null)throw Exception('Podpis nelze zpracovat.');await db.from('agreement_signatures').insert({'agreement_id':id,'signer_id':db.auth.currentUser!.id,'signer_name':n.text.trim(),'signature_png_base64':base64Encode(png),'terms_hash':hash});await refresh();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}}n.dispose();pen.dispose();}
+ Future<void> amend() async {final d=TextEditingController(),a=TextEditingController();final ok=await showDialog<bool>(context:context,builder:(c)=>AlertDialog(title:const Text('Návrh dodatku'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:d,decoration:const InputDecoration(labelText:'Co se mění?')),TextField(controller:a,decoration:const InputDecoration(labelText:'Změna ceny'))]),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('Zrušit')),FilledButton(onPressed:()=>Navigator.pop(c,d.text.trim().isNotEmpty),child:const Text('Odeslat'))]));if(ok==true){try{await db.from('amendments').insert({'agreement_id':id,'proposer_id':db.auth.currentUser!.id,'description':d.text.trim(),'amount_change':a.text.trim()});await refresh();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}}d.dispose();a.dispose();}
+ Future<void> decide(Map<String,dynamic> x,bool accept) async {try{await db.from('amendments').update({'status':accept?'accepted':'rejected','decided_at':DateTime.now().toUtc().toIso8601String(),'decided_by':db.auth.currentUser!.id}).eq('id',x['id']);await refresh();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}}
+ Widget section(String title,Widget child)=>Card(child:Padding(padding:const EdgeInsets.all(15),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:const TextStyle(fontWeight:FontWeight.bold,fontSize:16)),const SizedBox(height:10),child])));
+ @override Widget build(BuildContext c){final me=db.auth.currentUser!.id;return Scaffold(appBar:AppBar(title:const Text('Dohoda'),actions:[IconButton(onPressed:invite,icon:const Icon(Icons.qr_code_2))]),floatingActionButton:FloatingActionButton.extended(onPressed:amend,icon:const Icon(Icons.edit_note),label:const Text('Dodatek')),body:ListView(padding:const EdgeInsets.all(14),children:[
+ Text(widget.deal['title']??'',style:const TextStyle(fontSize:23,fontWeight:FontWeight.bold)),
+ section('Podmínky',Text((widget.deal['description']??'').toString()+'\nCena: '+(widget.deal['amount']??'').toString())),
+ section('Podpisy ('+signatures.length.toString()+'/2)',Column(children:[if(loading)const LinearProgressIndicator(),...signatures.map((s)=>ListTile(title:Text(s['signer_name']??''),subtitle:Text('Podepsáno: '+s['signed_at'].toString()))),if(signatures.isEmpty)const Text('Zatím nikdo nepodepsal.'),if(!signatures.any((s)=>s['signer_id']==me))FilledButton.icon(onPressed:sign,icon:const Icon(Icons.draw),label:const Text('Zkontrolovat a podepsat'))])),
+ section('Dodatky – původní dohoda se nepřepisuje',Column(children:[if(amendments.isEmpty)const Text('Zatím žádné dodatky.'),...amendments.map((x){final mine=x['proposer_id']==me;final pending=x['status']=='pending';return ListTile(title:Text(x['description']),subtitle:Text('Cena: '+(x['amount_change']??'').toString()+' • '+x['status'].toString()),trailing:pending&&!mine?Wrap(children:[IconButton(onPressed:()=>decide(x,true),icon:const Icon(Icons.check,color:Colors.green)),IconButton(onPressed:()=>decide(x,false),icon:const Icon(Icons.close,color:Colors.red))]):null);})])),
+ ]));}
 }
