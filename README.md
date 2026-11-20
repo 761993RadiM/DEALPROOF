@@ -1,28 +1,29 @@
 # DEALPROOF
 
-DEALPROOF is an Android-first app for documenting agreements between two people.
+Android-first application for recording agreements between two people.
 
-## Current status
+## Current implementation
 
-Version 0.1.0 is an early Flutter prototype. It currently keeps data only in app memory; data is not yet saved after restarting the app, and agreements are not yet shared with another person.
+- Email/password accounts through Supabase Auth.
+- Cloud-stored agreements visible to their participants.
+- Invite code and QR code for the second participant.
+- Separate user accounts and signatures drawn on screen.
+- Signature records include signer identity, timestamp and SHA-256 fingerprint of the agreed terms.
+- Amendment proposals are separate from the original agreement; the other participant can accept or reject them.
 
-## Planned MVP
+A drawn signature and in-app confirmation are evidence records, not automatically a qualified electronic signature. Do not represent the app as guaranteeing legal enforceability.
 
-- Accounts and cloud synchronization.
-- One shared agreement with two participants.
-- Separate confirmations from each participant.
-- Versioned amendment proposals: the original agreement is never overwritten; accepted and rejected proposals remain in the history.
-- Photos and file attachments.
-- Timeline and PDF export.
+## Cloud setup required before connected use
 
-## Run
+1. Create a Supabase project.
+2. Open SQL Editor and run `supabase/migrations/202611200001_initial_schema.sql`.
+3. In the GitHub repository, add Actions repository secrets:
+   - `SUPABASE_URL`: Project URL from Supabase Project Settings → API.
+   - `SUPABASE_ANON_KEY`: publishable/anon client key from the same page.
+4. Run the **Build Android APK** workflow again.
 
-Install Flutter, then run:
+Never put a Supabase service-role key in the Android app or GitHub build arguments. Only the public anon/publishable key belongs in the client; access is controlled by database row-level security.
 
-```sh
-flutter pub get
-flutter analyze
-flutter run
-```
+## Build
 
-An in-app confirmation is an evidence record. It is not automatically a qualified electronic signature and the app must not promise legal enforceability.
+GitHub Actions builds the Android APK. The app cannot connect to a cloud backend until the setup above is completed.
