@@ -41,7 +41,7 @@ class DealPage extends StatefulWidget {const DealPage({super.key,required this.d
 class _DealState extends State<DealPage>{
  final db=Supabase.instance.client;List<Map<String,dynamic>> signatures=[],amendments=[];bool loading=true;
  String get id=>widget.deal['id'].toString();
- String get terms=>(widget.deal['title']??'').toString()+'\n'+(widget.deal['description']??'').toString()+'\n'+(widget.deal['amount']??'').toString();
+ String get terms=>(widget.deal['title']??'').toString()+'\n'+(widget.deal['description']??'').toString()+'\n'+(widget.deal['currency']??'CZK').toString();
  String get hash=>sha256.convert(utf8.encode(terms)).toString();
  @override void initState(){super.initState();refresh();}
  Future<void> refresh() async {try{signatures=List<Map<String,dynamic>>.from(await db.from('agreement_signatures').select().eq('agreement_id',id));amendments=List<Map<String,dynamic>>.from(await db.from('amendments').select().eq('agreement_id',id).order('proposed_at',ascending:false));}catch(_){}if(mounted)setState(()=>loading=false);}
