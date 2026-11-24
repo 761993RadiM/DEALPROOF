@@ -31,6 +31,15 @@ jobs:
         run: flutter pub get
       - name: Check Dart code
         run: flutter analyze lib --no-fatal-infos
+      - name: Verify Supabase secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          test -n "$SUPABASE_URL" || { echo 'Missing GitHub secret: SUPABASE_URL'; exit 1; }
+          test -n "$SUPABASE_ANON_KEY" || { echo 'Missing GitHub secret: SUPABASE_ANON_KEY'; exit 1; }
+          case "$SUPABASE_URL" in https://*) ;; *) echo 'SUPABASE_URL must start with https://'; exit 1;; esac
+          echo 'Both Supabase secrets are configured.'
       - name: Build release APK
         run: >-
           flutter build apk --release
