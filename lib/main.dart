@@ -174,6 +174,9 @@ class _HomePageState extends State<HomePage> {
             'agreement_id': agreement['id'], 'email': address, 'role': 'participant',
           });
           await db.from('agreements').update({'status': 'shared'}).eq('id', agreement['id']);
+          await SharePlus.instance.share(ShareParams(
+            text: 'Byl(a) jsi pozván(a) do dohody DEALPROOF. Přihlas se nebo si vytvoř účet v aplikaci se stejnou e-mailovou adresou: ' + address,
+          ));
         }
         await load();
       } catch (e) { if (mounted) showError(e); }
@@ -367,7 +370,11 @@ class _AgreementPageState extends State<AgreementPage> {
       pw.SizedBox(height: 16),
       pw.Text('Stav: ' + statusLabel(widget.agreement['status'].toString())),
       pw.Text('Podpisové záznamy', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-      ...signatures.map((s) => pw.Text(s['signer_name'].toString() + ' — ' + s['signed_at'].toString())),
+      ...signatures.map((s) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+        pw.Text(s['signer_name'].toString() + ' — ' + s['signed_at'].toString()),
+        pw.SizedBox(height: 4),
+        pw.Image(pw.MemoryImage(base64Decode(s['signature_png_base64'].toString())), width: 150, height: 60, fit: pw.BoxFit.contain),
+      ])),
       pw.SizedBox(height: 14),
       pw.Text('Export záznamů aplikace. Právní účinky elektronického podpisu se posuzují podle okolností a právních předpisů.', style: const pw.TextStyle(fontSize: 9)),
     ]));
