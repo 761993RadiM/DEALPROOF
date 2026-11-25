@@ -439,12 +439,16 @@ Smluvní strany potvrzují, že si text přečetly, jeho obsahu rozumějí a mě
     final contractor = _partyData(contractorPrefix, 'zhotovitel');
     final inviteEmail = _c['other_email']!.text.trim().toLowerCase();
 
-    if (_consumerOrderer) {
+    final consumerLikeCombination = orderer['type'] == 'person' &&
+        (contractor['type'] == 'osvc' || contractor['type'] == 'company');
+
+    if (_consumerOrderer || consumerLikeCombination) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Spotřebitelské smlouvy zatím nelze tímto vzorem uzavřít. '
-            'Nejdříve musí být doplněny zvláštní informace o odstoupení a zahájení služby.',
+            'Tato kombinace může spadat do spotřebitelského režimu. '
+            'Aplikace zatím nepovoluje smlouvu mezi podnikatelem a soukromou fyzickou osobou, '
+            'dokud nebude doplněno zákonné poučení a odstoupení.',
           ),
         ),
       );
