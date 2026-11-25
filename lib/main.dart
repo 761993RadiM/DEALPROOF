@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:signature/signature.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'contracts/work_contract_wizard.dart';
 
 const supaUrl=String.fromEnvironment('SUPABASE_URL');
 const supaKey=String.fromEnvironment('SUPABASE_ANON_KEY');
@@ -46,17 +47,39 @@ class _HomeState extends State<HomePage>{
  @override void initState(){super.initState();load();}
  Future<void> load() async {try{items=List<Map<String,dynamic>>.from(await db.from('agreements').select().order('created_at',ascending:false));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}if(mounted)setState(()=>busy=false);}
  Future<void> create() async {
- final templates=<Map<String,String>>[
-  {'title':'Smlouva o dílo','description':'Zhotovitel se zavazuje provést pro objednatele sjednané dílo.\nRozsah a výsledek díla: [doplňte]\nMísto provedení: [doplňte]\nTermín zahájení: [doplňte]\nTermín dokončení: [doplňte]\nCena a způsob úhrady: dle položek dohody.\nPředání a převzetí: objednatel potvrdí převzetí nebo písemně uvede konkrétní vady.','item':'Provedení sjednaného díla'},
-  {'title':'Kupní smlouva','description':'Prodávající převádí na kupujícího vlastnické právo k níže uvedené věci.\nPředmět koupě a jeho stav: [doplňte]\nZpůsob předání: [doplňte]\nTermín předání: [doplňte]\nKupní cena a úhrada: dle položek dohody.','item':'Prodej věci'},
-  {'title':'Smlouva o zápůjčce','description':'Zapůjčitel přenechává vydlužiteli peněžní prostředky.\nČástka: dle položek dohody.\nDatum poskytnutí: [doplňte]\nTermín vrácení: [doplňte]\nZpůsob vrácení: [doplňte]\nÚrok: [bezúročná / doplňte].','item':'Poskytnutá částka'},
-  {'title':'Nájemní dohoda','description':'Pronajímatel přenechává nájemci k dočasnému užívání níže uvedenou věc/prostor.\nPředmět nájmu a stav: [doplňte]\nDoba nájmu: [doplňte]\nMísto předání: [doplňte]\nKauce a pravidla vrácení: [doplňte].','item':'Nájemné za sjednané období'},
-  {'title':'Dohoda o spolupráci','description':'Strany se dohodly na společné spolupráci za těchto podmínek.\nRozdělení úkolů a odpovědností: [doplňte]\nVýstupy a termíny: [doplňte]\nOdměna a náklady: dle položek dohody.\nZpůsob ukončení spolupráce: [doplňte].','item':'Sjednaná práce nebo služba'},
-  {'title':'Vlastní dohoda','description':'Předmět dohody: [doplňte]\nPovinnosti první strany: [doplňte]\nPovinnosti druhé strany: [doplňte]\nTermíny a způsob předání: [doplňte]\nOstatní ujednání: [doplňte].','item':'Sjednané plnění'}
- ];
- final selected=await showDialog<Map<String,String>>(context:context,builder:(c)=>AlertDialog(title:const Text('Vyber vzor dohody'),content:SizedBox(width:360,child:ListView(shrinkWrap:true,children:templates.map((x)=>ListTile(leading:const Icon(Icons.description_outlined),title:Text(x['title']!),subtitle:Text(x['item']!),onTap:()=>Navigator.pop(c,x))).toList())),actions:[TextButton(onPressed:()=>Navigator.pop(c,null),child:const Text('Zrušit'))]));
- if(selected==null)return;
- final t=TextEditingController(text:selected['title']),d=TextEditingController(text:selected['description']),cur=TextEditingController(text:'CZK'),e=TextEditingController(),item=TextEditingController(text:selected['item']),qty=TextEditingController(text:'1'),unit=TextEditingController(text:'ks'),price=TextEditingController(text:'0');final ok=await showDialog<bool>(context:context,builder:(c)=>AlertDialog(title:const Text('Nová dohoda'),content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:t,decoration:const InputDecoration(labelText:'Název dohody')),TextField(controller:d,decoration:const InputDecoration(labelText:'Podmínky a termín'),minLines:2,maxLines:4),TextField(controller:item,decoration:const InputDecoration(labelText:'Položka práce / služby')),Row(children:[Expanded(child:TextField(controller:qty,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Množství'))),const SizedBox(width:8),Expanded(child:TextField(controller:unit,decoration:const InputDecoration(labelText:'Jednotka')))]),TextField(controller:price,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Cena za jednotku')) ,TextField(controller:cur,decoration:const InputDecoration(labelText:'Měna (CZK)')),TextField(controller:e,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'E-mail druhé osoby'))])),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('Zrušit')),FilledButton(onPressed:()=>Navigator.pop(c,t.text.trim().isNotEmpty&&item.text.trim().isNotEmpty&&e.text.trim().contains('@')),child:const Text('Vytvořit a pozvat'))]));if(ok==true){try{final id=await db.rpc('create_agreement_with_invite',params:{'p_title':t.text.trim(),'p_description':d.text.trim(),'p_currency':cur.text.trim().isEmpty?'CZK':cur.text.trim().toUpperCase(),'p_item_description':item.text.trim(),'p_quantity':double.tryParse(qty.text.replaceAll(',','.'))??1,'p_unit':unit.text.trim().isEmpty?'ks':unit.text.trim(),'p_unit_price':double.tryParse(price.text.replaceAll(',','.'))??0,'p_invitee_email':e.text.trim().toLowerCase()});await SharePlus.instance.share(ShareParams(text:'Byl/a jsi pozván/a do dohody DEALPROOF: '+t.text.trim()+'. Přihlas se v aplikaci stejným e-mailem: '+e.text.trim()+'. ID dohody: '+id.toString()));await load();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}}for(final x in [t,d,cur,e,item,qty,unit,price]){x.dispose();}}
+  final draft = await Navigator.of(context).push<WorkContractDraft>(
+    MaterialPageRoute(
+      builder: (_) => WorkContractWizard(
+        initialEmail: db.auth.currentUser?.email ?? '',
+      ),
+    ),
+  );
+  if (draft == null) return;
+  try {
+    final id = await db.rpc(
+      'create_work_agreement_with_invite',
+      params: draft.toRpcParams(),
+    );
+    await SharePlus.instance.share(
+      ShareParams(
+        text: 'Byl/a jsi pozván/a do smlouvy o dílo v aplikaci DEALPROOF. '
+            'Přihlas se e-mailem ${draft.inviteeEmail}. ID dohody: ${id.toString()}',
+      ),
+    );
+    await load();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Smlouva byla vytvořena a odeslána druhé straně.')),
+      );
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Smlouvu se nepodařilo vytvořit: ${e.toString()}')),
+      );
+    }
+  }
+ }
  Future<void> join() async {try{final r=await db.rpc('accept_agreement_invitations');await load();if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Přijaté pozvánky: '+(r is List?r.length:0).toString())));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}}
  @override Widget build(BuildContext c)=>Scaffold(
   appBar:AppBar(title:const Text('DEALPROOF'),actions:[
@@ -110,7 +133,7 @@ class _DealState extends State<DealPage>{
  final db=Supabase.instance.client;List<Map<String,dynamic>> signatures=[],amendments=[],lineItems=[];bool loading=true;
  String get id=>widget.deal['id'].toString();
  String get terms=>(widget.deal['title']??'').toString()+'\n'+(widget.deal['description']??'').toString()+'\n'+(widget.deal['currency']??'CZK').toString();
- String get hash=>sha256.convert(utf8.encode(terms)).toString();
+ String get hash=>(widget.deal['content_hash']??sha256.convert(utf8.encode(terms)).toString()).toString();
  @override void initState(){super.initState();refresh();}
  Future<void> refresh() async {try{signatures=List<Map<String,dynamic>>.from(await db.from('agreement_signatures').select().eq('agreement_id',id));lineItems=List<Map<String,dynamic>>.from(await db.from('agreement_items').select().eq('agreement_id',id).order('created_at'));amendments=List<Map<String,dynamic>>.from(await db.from('amendments').select().eq('agreement_id',id).order('created_at',ascending:false));}catch(_){}if(mounted)setState(()=>loading=false);}
  Future<void> invite() async {final rows=await db.from('agreement_participants').select('email').eq('agreement_id',id);final emails=(rows as List).where((x)=>x['email']!=null).map((x)=>x['email'].toString()).join(', ');await SharePlus.instance.share(ShareParams(text:'Dohoda DEALPROOF: '+(widget.deal['title']??'').toString()+'. Pozvaný e-mail: '+(emails.isEmpty?'není uveden':emails)+'. Přihlas se v aplikaci stejným e-mailem, pozvánka se přijme automaticky.'));}
@@ -120,7 +143,7 @@ class _DealState extends State<DealPage>{
  Widget section(String title,Widget child)=>Card(child:Padding(padding:const EdgeInsets.all(15),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:const TextStyle(fontWeight:FontWeight.bold,fontSize:16)),const SizedBox(height:10),child])));
  @override Widget build(BuildContext c){final me=db.auth.currentUser!.id;return Scaffold(appBar:AppBar(title:const Text('Dohoda'),actions:[IconButton(onPressed:invite,icon:const Icon(Icons.qr_code_2))]),floatingActionButton:FloatingActionButton.extended(onPressed:amend,icon:const Icon(Icons.edit_note),label:const Text('Dodatek')),body:ListView(padding:const EdgeInsets.all(14),children:[
  Text(widget.deal['title']??'',style:const TextStyle(fontSize:23,fontWeight:FontWeight.bold)),
- section('Podmínky',Text((widget.deal['description']??'').toString()+'\nStav: '+(widget.deal['status']??'').toString()+'\nMěna: '+(widget.deal['currency']??'CZK').toString())),
+ section('Text smlouvy',Text((widget.deal['contract_text']??widget.deal['description']??'').toString()+'\nStav: '+(widget.deal['status']??'').toString()+'\nMěna: '+(widget.deal['currency']??'CZK').toString())),
  section('Položky dohody',Column(children:[if(lineItems.isEmpty)const Text('Bez položek.'),...lineItems.map((it)=>ListTile(title:Text(it['description']??''),subtitle:Text((it['quantity']??1).toString()+' '+(it['unit']??'ks')+' × '+(it['unit_price']??0).toString()+' '+(widget.deal['currency']??'CZK').toString())))])),
  section('Podpisy ('+signatures.length.toString()+'/2)',Column(children:[if(loading)const LinearProgressIndicator(),...signatures.map((s)=>ListTile(title:Text(s['signer_name']??''),subtitle:Text('Podepsáno: '+s['signed_at'].toString()))),if(signatures.isEmpty)const Text('Zatím nikdo nepodepsal.'),if(!signatures.any((s)=>s['signer_id']==me))FilledButton.icon(onPressed:sign,icon:const Icon(Icons.draw),label:const Text('Zkontrolovat a podepsat'))])),
  section('Dodatky – původní dohoda se nepřepisuje',Column(children:[if(amendments.isEmpty)const Text('Zatím žádné dodatky.'),...amendments.map((x){final mine=x['created_by']==me;final pending=x['status']=='proposed';return ListTile(title:Text(x['description']),subtitle:Text('Změna ceny: '+(x['price_delta']??0).toString()+' • '+x['status'].toString()),trailing:pending&&!mine?Wrap(children:[IconButton(onPressed:()=>decide(x,true),icon:const Icon(Icons.check,color:Colors.green)),IconButton(onPressed:()=>decide(x,false),icon:const Icon(Icons.close,color:Colors.red))]):null);})])),
