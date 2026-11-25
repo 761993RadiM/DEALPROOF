@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
@@ -25,7 +26,19 @@ class Gate extends StatelessWidget {
 class LoginPage extends StatefulWidget {const LoginPage({super.key});@override State<LoginPage> createState()=>_LoginState();}
 class _LoginState extends State<LoginPage>{
  final email=TextEditingController(),pass=TextEditingController(),name=TextEditingController();bool signup=false,busy=false;String error='';
- Future<void> submit() async {setState(()=>busy=true);try{final a=Supabase.instance.client.auth;if(signup){final r=await a.signUp(email:email.text.trim(),password:pass.text);if(r.session!=null){try{await Supabase.instance.client.rpc('accept_agreement_invitations');}catch(_){}}if(r.session==null)error='Potvrď registrační e-mail a potom se přihlas.';}else{await a.signInWithPassword(email:email.text.trim(),password:pass.text);try{await Supabase.instance.client.rpc('accept_agreement_invitations');}catch(_){}}}catch(e){error=e.toString();}if(mounted)setState(()=>busy=false);}
+ Future<void> submit() async {setState(()=>busy=true);try{final a=Supabase.instance.client.auth;if(signup){final r=await a.signUp(email:email.text.trim(),password:pass.text);if(r.session!=null){try{await Supabase.instance.client.rpc('accept_agreement_invitations');}catch(_){}}if(r.session==null)error='Potvrď registrační e-mail a potom se přihlas.';}else{await a.signInWithPassword(email:email.text.trim(),password:pass.text);try{await Supabase.instance.client.rpc('accept_agreement_invitations');}catch(_){}}}catch(e){
+ error=e.toString();
+ final checks=<String>[];
+ for(final host in [Uri.parse(supaUrl).host,'example.com']){
+  try{
+   final addresses=await InternetAddress.lookup(host).timeout(const Duration(seconds:8));
+   checks.add('$host: OK ('+addresses.map((x)=>x.address).join(', ')+')');
+  }catch(d){
+   checks.add('$host: CHYBA ('+d.toString()+')');
+  }
+ }
+ error+='\n\nDiagnostika DNS:\n'+checks.join('\n');
+}if(mounted)setState(()=>busy=false);}
  @override Widget build(BuildContext c)=>Scaffold(appBar:AppBar(title:const Text('DEALPROOF')),body:ListView(padding:const EdgeInsets.all(22),children:[const Icon(Icons.handshake_outlined,size:58,color:Colors.tealAccent),Text(signup?'Registrace':'Přihlášení',style:Theme.of(c).textTheme.headlineMedium),if(signup)TextField(controller:name,decoration:const InputDecoration(labelText:'Jméno')),TextField(controller:email,decoration:const InputDecoration(labelText:'E-mail')),TextField(controller:pass,obscureText:true,decoration:const InputDecoration(labelText:'Heslo')),if(error.isNotEmpty)Text(error),FilledButton(onPressed:busy?null:submit,child:Text(signup?'Zaregistrovat':'Přihlásit')),TextButton(onPressed:()=>setState(()=>signup=!signup),child:Text(signup?'Mám účet':'Vytvořit účet'))]));}
 class HomePage extends StatefulWidget {const HomePage({super.key});@override State<HomePage> createState()=>_HomeState();}
 class _HomeState extends State<HomePage>{
