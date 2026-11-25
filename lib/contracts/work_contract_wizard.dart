@@ -374,13 +374,13 @@ Práva z vadného plnění se řídí občanským zákoníkem, zejména § 2615 
 
 ${warrantyClause}
 
-XI. UKONČENÍ SMLOUVY A VYPOŘÁDÁNÍ
+IX. UKONČENÍ SMLOUVY A VYPOŘÁDÁNÍ
 ${_c['termination_terms']!.text.trim()}
 
-IX. SPOTŘEBITELSKÁ UJEDNÁNÍ
+X. SPOTŘEBITELSKÁ UJEDNÁNÍ
 ${_consumerOrderer ? 'Objednatel vystupuje jako spotřebitel. Uplatní se kogentní ochrana spotřebitele, informační povinnosti a pravidla reklamací. Pokud je smlouva uzavírána na dálku nebo mimo obchodní prostory, musí být před jejím potvrzením poskytnuty také informace a poučení vyžadované právními předpisy; tento vzor sám o sobě nenahrazuje individuální posouzení těchto povinností.' : 'Strany uvádějí, že objednatel podle zadaných údajů nevystupuje jako spotřebitel. Ukáže-li se toto zařazení jako nesprávné, použijí se příslušná kogentní ustanovení na ochranu spotřebitele.'}
 
-X. ZÁVĚREČNÁ UJEDNÁNÍ
+XI. ZÁVĚREČNÁ UJEDNÁNÍ
 Tato smlouva zachycuje ujednání stran v okamžiku jejího potvrzení. Je uzavřena okamžikem, kdy obě strany v aplikaci DEALPROOF výslovně potvrdí totožné znění smlouvy. Aplikace uchová verzi dokumentu, čas potvrzení a kontrolní otisk obsahu. Potvrzení v aplikaci není samo o sobě kvalifikovaným elektronickým podpisem.
 
 Jakékoli pozdější změny se zachytí samostatným dodatkem nebo změnovým listem potvrzeným oběma stranami. Původní smlouva zůstává zachována a dodatek ji mění pouze v rozsahu výslovně uvedeném v dodatku.
