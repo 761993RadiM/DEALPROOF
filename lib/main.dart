@@ -152,7 +152,132 @@ class _DealState extends State<DealPage>{
  Future<void> refresh() async {try{signatures=List<Map<String,dynamic>>.from(await db.from('agreement_signatures').select().eq('agreement_id',id));lineItems=List<Map<String,dynamic>>.from(await db.from('agreement_items').select().eq('agreement_id',id).order('position').order('created_at'));amendments=List<Map<String,dynamic>>.from(await db.from('amendments').select().eq('agreement_id',id).order('created_at',ascending:false));}catch(_){}if(mounted)setState(()=>loading=false);}
  Future<void> invite() async {final rows=await db.from('agreement_participants').select('email').eq('agreement_id',id);final emails=(rows as List).where((x)=>x['email']!=null).map((x)=>x['email'].toString()).join(', ');await SharePlus.instance.share(ShareParams(text:'Dohoda DEALPROOF: '+(widget.deal['title']??'').toString()+'. Pozvaný e-mail: '+(emails.isEmpty?'není uveden':emails)+'. Přihlas se v aplikaci stejným e-mailem, pozvánka se přijme automaticky.'));}
  Future<void> sign() async {final n=TextEditingController();final pen=SignatureController(penStrokeWidth:3,penColor:Colors.white,exportBackgroundColor:const Color(0xff202a2d));final ok=await showDialog<bool>(context:context,builder:(c)=>AlertDialog(title:const Text('Podepsat dohodu'),content:SizedBox(width:330,child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:n,decoration:const InputDecoration(labelText:'Jméno')),const SizedBox(height:10),Container(height:150,color:const Color(0xff202a2d),child:Signature(controller:pen,backgroundColor:const Color(0xff202a2d))),TextButton(onPressed:pen.clear,child:const Text('Vymazat podpis')),const Text('Podpis prstem není automaticky kvalifikovaný elektronický podpis.',style:TextStyle(fontSize:12))])),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('Zrušit')),FilledButton(onPressed:()=>Navigator.pop(c,true),child:const Text('Potvrdit'))]));if(ok==true){try{if(n.text.trim().isEmpty||pen.isEmpty)throw Exception('Vyplň jméno a podpis.');final png=await pen.toPngBytes();if(png==null)throw Exception('Podpis nelze zpracovat.');await db.from('agreement_signatures').insert({'agreement_id':id,'signer_id':db.auth.currentUser!.id,'signer_name':n.text.trim(),'signature_png_base64':base64Encode(png),'terms_hash':hash});await refresh();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}}n.dispose();pen.dispose();}
- Future<void> amend() async {final d=TextEditingController(),a=TextEditingController();final ok=await showDialog<bool>(context:context,builder:(c)=>AlertDialog(title:const Text('Návrh dodatku'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:d,decoration:const InputDecoration(labelText:'Co se mění?')),TextField(controller:a,decoration:const InputDecoration(labelText:'Změna ceny'))]),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('Zrušit')),FilledButton(onPressed:()=>Navigator.pop(c,d.text.trim().isNotEmpty),child:const Text('Odeslat'))]));if(ok==true){try{await db.from('amendments').insert({'agreement_id':id,'created_by':db.auth.currentUser!.id,'description':d.text.trim(),'price_delta':double.tryParse(a.text.trim().replaceAll(',','.'))??0,'status':'proposed'});await refresh();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}}d.dispose();a.dispose();}
+ Future<void> amend() async {
+  final description = TextEditingController();
+  final priceDelta = TextEditingController(text: '0');
+  final dueDate = TextEditingController();
+  final formKey = GlobalKey<FormState>();
+
+  String? validateDate(String? value) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) return null;
+    final match = RegExp(r'^(\\d{1,2})\\.(\\d{1,2})\\.(\\d{4})$').firstMatch(text);
+    if (match == null) return 'Použij formát DD.MM.RRRR.';
+    final day = int.parse(match.group(1)!);
+    final month = int.parse(match.group(2)!);
+    final year = int.parse(match.group(3)!);
+    final date = DateTime(year, month, day);
+    if (date.year != year || date.month != month || date.day != day) {
+      return 'Zadej skutečné kalendářní datum.';
+    }
+    return null;
+  }
+
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Návrh dodatku'),
+      content: SizedBox(
+        width: 440,
+        height: 340,
+        child: Form(
+          key: formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: description,
+                  minLines: 3,
+                  maxLines: 5,
+                  maxLength: 10000,
+                  decoration: const InputDecoration(
+                    labelText: 'Přesný popis změny / vícepráce',
+                    helperText: 'Popiš rozsah, množství, materiál nebo důvod změny.',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) => value == null || value.trim().isEmpty
+                      ? 'Popis změny je povinný.'
+                      : null,
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: priceDelta,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Změna ceny v Kč (+ navýšení / − snížení)',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    final parsed = double.tryParse((value ?? '').trim().replaceAll(',', '.'));
+                    if (parsed == null || !parsed.isFinite) return 'Zadej platnou částku.';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: dueDate,
+                  decoration: const InputDecoration(
+                    labelText: 'Nový termín dokončení (nepovinné)',
+                    hintText: 'DD.MM.RRRR',
+                    helperText: 'Nevyplňuj, pokud se termín nemění.',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: validateDate,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('Zrušit'),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (formKey.currentState!.validate()) {
+              Navigator.pop(dialogContext, true);
+            }
+          },
+          child: const Text('Odeslat návrh'),
+        ),
+      ],
+    ),
+  );
+
+  if (ok == true) {
+    try {
+      final parsedPrice = double.parse(priceDelta.text.trim().replaceAll(',', '.'));
+      final dateText = dueDate.text.trim();
+      String? isoDate;
+      if (dateText.isNotEmpty) {
+        final parts = dateText.split('.');
+        isoDate = parts[2] + '-' + parts[1].padLeft(2, '0') + '-' + parts[0].padLeft(2, '0');
+      }
+      await db.from('amendments').insert({
+        'agreement_id': id,
+        'created_by': db.auth.currentUser!.id,
+        'description': description.text.trim(),
+        'price_delta': parsedPrice,
+        'due_date': isoDate,
+        'status': 'proposed',
+      });
+      await refresh();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Dodatek se nepodařilo odeslat: ' + e.toString())),
+        );
+      }
+    }
+  }
+
+  description.dispose();
+  priceDelta.dispose();
+  dueDate.dispose();
+ }
  Future<void> decide(Map<String,dynamic> x,bool accept) async {try{await db.from('amendment_signatures').insert({'amendment_id':x['id'],'user_id':db.auth.currentUser!.id,'decision':accept?'accepted':'rejected'});await refresh();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}}
  Future<void> exportPdf() async {
   try {
