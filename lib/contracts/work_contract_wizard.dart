@@ -277,6 +277,10 @@ class _WorkContractWizardState extends State<WorkContractWizard> {
       'not_payer' => 'Zhotovitel prohlašuje, že není plátcem DPH; DPH se k ceně nepřipočítává.',
       _ => 'Režim DPH nebyl vybrán.',
     };
+
+    final warrantyClause = _warrantyMode == 'agreed'
+        ? 'Zhotovitel poskytuje výslovnou záruku za jakost v tomto rozsahu a po tuto dobu: ${_c['warranty_description']!.text.trim()}. Záruční doba počíná běžet předáním díla.'
+        : 'Strany výslovně nesjednávají smluvní záruku za jakost nad rámec zákonných práv z vadného plnění.';
     String party(Map<String, dynamic> p) {
       final company = p['type'] == 'company';
       final ico = p['ico']?.toString().trim() ?? '';
@@ -366,7 +370,12 @@ Dílo je provedeno jeho dokončením a předáním. Objednatel při převzetí u
 VIII. VADY DÍLA A ZÁKONNÁ PRÁVA
 ${_c['defect_contact']!.text.trim()}
 
-Práva z vadného plnění se řídí občanským zákoníkem, zejména ustanoveními o smlouvě o dílo. Tato smlouva nevylučuje ani nezkracuje práva, která nelze podle zákona vyloučit nebo omezit. Záruka za jakost je sjednána pouze tehdy, je-li výslovně uvedena v této smlouvě nebo v samostatném potvrzení; případná záruka musí mít určený rozsah a dobu.
+Práva z vadného plnění se řídí občanským zákoníkem, zejména § 2615 až § 2619. Objednatel oznámí zjištěné vady bez zbytečného odkladu. Tato smlouva nevylučuje ani nezkracuje práva, která nelze podle zákona vyloučit nebo omezit.
+
+${warrantyClause}
+
+XI. UKONČENÍ SMLOUVY A VYPOŘÁDÁNÍ
+${_c['termination_terms']!.text.trim()}
 
 IX. SPOTŘEBITELSKÁ UJEDNÁNÍ
 ${_consumerOrderer ? 'Objednatel vystupuje jako spotřebitel. Uplatní se kogentní ochrana spotřebitele, informační povinnosti a pravidla reklamací. Pokud je smlouva uzavírána na dálku nebo mimo obchodní prostory, musí být před jejím potvrzením poskytnuty také informace a poučení vyžadované právními předpisy; tento vzor sám o sobě nenahrazuje individuální posouzení těchto povinností.' : 'Strany uvádějí, že objednatel podle zadaných údajů nevystupuje jako spotřebitel. Ukáže-li se toto zařazení jako nesprávné, použijí se příslušná kogentní ustanovení na ochranu spotřebitele.'}
