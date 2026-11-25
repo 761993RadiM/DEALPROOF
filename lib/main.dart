@@ -151,7 +151,112 @@ class _DealState extends State<DealPage>{
  @override void initState(){super.initState();refresh();}
  Future<void> refresh() async {try{signatures=List<Map<String,dynamic>>.from(await db.from('agreement_signatures').select().eq('agreement_id',id));lineItems=List<Map<String,dynamic>>.from(await db.from('agreement_items').select().eq('agreement_id',id).order('position').order('created_at'));amendments=List<Map<String,dynamic>>.from(await db.from('amendments').select().eq('agreement_id',id).order('created_at',ascending:false));}catch(_){}if(mounted)setState(()=>loading=false);}
  Future<void> invite() async {final rows=await db.from('agreement_participants').select('email').eq('agreement_id',id);final emails=(rows as List).where((x)=>x['email']!=null).map((x)=>x['email'].toString()).join(', ');await SharePlus.instance.share(ShareParams(text:'Dohoda DEALPROOF: '+(widget.deal['title']??'').toString()+'. Pozvaný e-mail: '+(emails.isEmpty?'není uveden':emails)+'. Přihlas se v aplikaci stejným e-mailem, pozvánka se přijme automaticky.'));}
- Future<void> sign() async {final n=TextEditingController();final pen=SignatureController(penStrokeWidth:3,penColor:Colors.white,exportBackgroundColor:const Color(0xff202a2d));final ok=await showDialog<bool>(context:context,builder:(c)=>AlertDialog(title:const Text('Podepsat dohodu'),content:SizedBox(width:330,child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:n,decoration:const InputDecoration(labelText:'Jméno')),const SizedBox(height:10),Container(height:150,color:const Color(0xff202a2d),child:Signature(controller:pen,backgroundColor:const Color(0xff202a2d))),TextButton(onPressed:pen.clear,child:const Text('Vymazat podpis')),const Text('Podpis prstem není automaticky kvalifikovaný elektronický podpis.',style:TextStyle(fontSize:12))])),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('Zrušit')),FilledButton(onPressed:()=>Navigator.pop(c,true),child:const Text('Potvrdit'))]));if(ok==true){try{if(n.text.trim().isEmpty||pen.isEmpty)throw Exception('Vyplň jméno a podpis.');final png=await pen.toPngBytes();if(png==null)throw Exception('Podpis nelze zpracovat.');await db.from('agreement_signatures').insert({'agreement_id':id,'signer_id':db.auth.currentUser!.id,'signer_name':n.text.trim(),'signature_png_base64':base64Encode(png),'terms_hash':hash});await refresh();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}}n.dispose();pen.dispose();}
+ Future<void> sign() async {
+  final name = TextEditingController();
+  final pen = SignatureController(
+    penStrokeWidth: 3,
+    penColor: Colors.white,
+    exportBackgroundColor: const Color(0xff202a2d),
+  );
+  var acceptedExactTerms = false;
+
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (dialogContext, setDialogState) => AlertDialog(
+        title: const Text('Potvrdit a podepsat dohodu'),
+        content: SizedBox(
+          width: 360,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: name,
+                  decoration: const InputDecoration(labelText: 'Jméno a příjmení'),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  height: 150,
+                  color: const Color(0xff202a2d),
+                  child: Signature(
+                    controller: pen,
+                    backgroundColor: const Color(0xff202a2d),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: pen.clear,
+                    child: const Text('Vymazat podpis'),
+                  ),
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: acceptedExactTerms,
+                  onChanged: (value) => setDialogState(
+                    () => acceptedExactTerms = value ?? false,
+                  ),
+                  title: const Text(
+                    'Přečetl/a jsem dohodu a souhlasím s jejím přesným zněním včetně položek a uvedené ceny.',
+                  ),
+                  subtitle: Text(
+                    'SHA-256: ' + hash,
+                    style: const TextStyle(fontSize: 10),
+                  ),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                const Text(
+                  'Potvrzení v aplikaci a podpis prstem nejsou automaticky kvalifikovaným elektronickým podpisem.',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Zrušit'),
+          ),
+          FilledButton(
+            onPressed: acceptedExactTerms && name.text.trim().isNotEmpty && !pen.isEmpty
+                ? () => Navigator.pop(dialogContext, true)
+                : null,
+            child: const Text('Potvrdit znění a podepsat'),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  if (ok == true) {
+    try {
+      if (name.text.trim().isEmpty || pen.isEmpty || !acceptedExactTerms) {
+        throw Exception('Doplň jméno, podpis a výslovný souhlas s textem dohody.');
+      }
+      final png = await pen.toPngBytes();
+      if (png == null) throw Exception('Podpis nelze zpracovat.');
+      await db.from('agreement_signatures').insert({
+        'agreement_id': id,
+        'signer_id': db.auth.currentUser!.id,
+        'signer_name': name.text.trim(),
+        'signature_png_base64': base64Encode(png),
+        'terms_hash': hash,
+      });
+      await refresh();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    }
+  }
+
+  name.dispose();
+  pen.dispose();
+ }
  Future<void> amend() async {
   final description = TextEditingController();
   final priceDelta = TextEditingController(text: '0');
