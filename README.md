@@ -36,6 +36,7 @@ Migrations are stored in `supabase/migrations` and use the same version identifi
 6. `20261125221858_work_contract_warranty_termination.sql` — requires explicit warranty selection and termination/settlement terms for every new work contract.
 7. `20261125221948_amendment_validation.sql` — validates amendment descriptions and price changes; the amendment may also set a new completion date.
 8. `20261125222724_work_contract_ico_validation.sql` — checks Czech IČO control digits in the form and database.
+9. `20261125223256_work_contract_consumer_guard.sql` — blocks consumer-like agreements until a compliant consumer flow is implemented.
 
 Do not run just one of these files on a blank database. They form one ordered setup. The connected production project already has these migrations recorded as applied.
 
