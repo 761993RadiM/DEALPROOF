@@ -364,6 +364,8 @@ Materiál zajišťuje: ${_materialProvider == 'zhotovitel' ? 'zhotovitel' : 'obj
 
 Objednatel umožní přístup na místo plnění v dohodnutých termínech a poskytne informace a součinnost potřebnou k provedení díla. Strany si bez zbytečného odkladu oznámí okolnosti, které mohou ovlivnit rozsah, cenu nebo termín. Zhotovitel upozorní na nevhodný materiál nebo pokyn v rozsahu stanoveném právními předpisy; případný pokyn objednatele trvat na takovém postupu bude zachycen písemně.
 
+Zjistí-li zhotovitel při provádění stavby nebo její změny skrytou překážku místa plnění, která znemožňuje provést dílo dohodnutým způsobem, oznámí ji bez zbytečného odkladu objednateli, navrhne změnu díla a do dosažení dohody může dotčené práce přerušit. Nedohodnou-li se strany v přiměřené lhůtě, mohou postupovat podle § 2627 občanského zákoníku včetně odstoupení a vypořádání již provedených prací.
+
 Objednatel má právo kontrolovat provádění díla v rozsahu odpovídajícím povaze díla. Zjistí-li porušení povinností zhotovitele, může požadovat nápravu; další práva včetně odstoupení se řídí § 2593 občanského zákoníku. Kontrola nesmí bezdůvodně narušovat postup prací.
 
 IV. TERMÍNY
@@ -398,7 +400,9 @@ VII. DOKONČENÍ, PŘEDÁNÍ A PŘEVZETÍ
 Dílo bude předáno: ${_c['handover_place']!.text.trim()}.
 ${_c['handover_rules']!.text.trim()}
 
-Dílo je provedeno jeho dokončením a předáním. Objednatel při převzetí uvede, zda přebírá dílo bez výhrad, nebo s výhradami; konkrétní vady a nedodělky se popíší v předávacím protokolu. Je-li to vzhledem k povaze díla vhodné, mohou strany dohodnout předání po oddělitelných částech. U stavby se použije také zvláštní zákonné pravidlo pro převzetí stavby.
+Dílo je provedeno jeho dokončením a předáním. Objednatel při převzetí uvede, zda přebírá dílo bez výhrad, nebo s výhradami; konkrétní vady a nedodělky se popíší v předávacím protokolu. Je-li to vzhledem k povaze díla vhodné, mohou strany dohodnout předání po oddělitelných částech.
+
+Je-li předmětem díla stavba nebo její část, použije se § 2628 občanského zákoníku: objednatel nemůže odmítnout převzetí pouze pro ojedinělé drobné vady, které nebrání funkčnímu ani estetickému užívání stavby a její užívání podstatně neomezují. Tím nejsou dotčena práva z vadného plnění ani možnost odmítnout převzetí při vadách, které těmto podmínkám neodpovídají.
 
 VIII. VADY DÍLA A ZÁKONNÁ PRÁVA
 ${_c['defect_contact']!.text.trim()}
