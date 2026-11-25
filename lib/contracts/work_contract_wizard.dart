@@ -278,6 +278,16 @@ class _WorkContractWizardState extends State<WorkContractWizard> {
       _ => 'Režim DPH nebyl vybrán.',
     };
 
+    final priceRule = switch (_priceMode) {
+      'fixed' =>
+        'Cena je sjednána pevnou částkou podle položkového rozpočtu uvedeného v této smlouvě. Podle § 2620 odst. 1 občanského zákoníku nelze požadovat změnu ceny jen proto, že provedení díla vyžádalo jiné úsilí nebo náklady, než se předpokládalo. Tím nejsou dotčeny zákonné výjimky, zejména § 2620 odst. 2 občanského zákoníku.',
+      'estimate' =>
+        'Cena je stanovena odhadem. Zjistí-li zhotovitel, že bude nutné odhad podstatně překročit, oznámí to objednateli bez zbytečného odkladu, odůvodní zvýšení a uvede nově určenou cenu. Práva objednatele včetně možnosti odstoupení se řídí § 2612 občanského zákoníku.',
+      'calculation' =>
+        'Konečná cena bude určena podle skutečně provedeného a doloženého množství a sjednaných jednotkových cen. Změny rozsahu a položek se předem potvrzují postupem pro vícepráce a dodatky.',
+      _ => 'Způsob určení ceny musí být před potvrzením smlouvy zvolen.',
+    };
+
     final warrantyClause = _warrantyMode == 'agreed'
         ? 'Zhotovitel poskytuje výslovnou záruku za jakost v tomto rozsahu a po tuto dobu: ${_c['warranty_description']!.text.trim()}. Záruční doba počíná běžet předáním díla.'
         : 'Strany výslovně nesjednávají smluvní záruku za jakost nad rámec zákonných práv z vadného plnění.';
@@ -331,7 +341,7 @@ Popis materiálu a ujednání o jeho zajištění:
 ${_c['materials_description']!.text.trim()}
 Materiál zajišťuje: ${_materialProvider == 'zhotovitel' ? 'zhotovitel' : 'objednatel'}.
 
-Objednatel umožní přístup na místo plnění v dohodnutých termínech a poskytne informace a součinnost potřebnou k provedení díla. Strany si bez zbytečného odkladu oznámí okolnosti, které mohou ovlivnit rozsah, cenu nebo termín. Zhotovitel upozorní na nevhodný materiál nebo pokyn v rozsahu stanoveném právními předpisy; případný pokyn objednatele trvat na takovém postupu bude zachycen písemně.
+Objednatel umožní přístup na místo plnění v dohodnutých termínech a poskytne informace a součinnost potřebnou k provedení díla. Strany si bez zbytečného odkladu oznámí okolnosti, které mohou ovlivnit rozsah, cenu nebo termín. Zhotovitel upozorní na nevhodný materiál nebo pokyn v rozsahu stanoveném právními předpisy; případný pokyn objednatele trvat na takovém postupu bude zachycen písemně.\n\nObjednatel má právo kontrolovat provádění díla v rozsahu odpovídajícím povaze díla. Zjistí-li porušení povinností zhotovitele, může požadovat nápravu; další práva včetně odstoupení se řídí § 2593 občanského zákoníku. Kontrola nesmí bezdůvodně narušovat postup prací.
 
 IV. TERMÍNY
 Předpokládané zahájení: ${_c['start_date']!.text.trim().isEmpty ? 'bude upřesněno písemnou dohodou' : _c['start_date']!.text.trim()}
@@ -356,7 +366,7 @@ ${_c['payment_method']!.text.trim()}
 Splatnost:
 ${_c['payment_due']!.text.trim()}.
 
-Je-li cena sjednána odhadem a zhotovitel zjistí, že bude nutné jej podstatně překročit, oznámí to objednateli bez zbytečného odkladu, odůvodní zvýšení a uvede nově určenou cenu. Práva stran se řídí zejména § 2612 občanského zákoníku. U ceny určené podle množství bude konečné vyúčtování vycházet ze skutečně provedeného a doloženého množství podle sjednaných jednotkových cen.
+${priceRule}
 
 VI. ZMĚNY ROZSAHU A VÍCEPRÁCE
 ${_c['extra_work']!.text.trim()}
