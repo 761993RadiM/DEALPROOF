@@ -394,6 +394,18 @@ Smluvní strany potvrzují, že si text přečetly, jeho obsahu rozumějí a mě
     final contractor = _partyData(contractorPrefix, 'zhotovitel');
     final inviteEmail = _c['other_email']!.text.trim().toLowerCase();
 
+    if (_consumerOrderer) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Spotřebitelské smlouvy zatím nelze tímto vzorem uzavřít. '
+            'Nejdříve musí být doplněny zvláštní informace o odstoupení a zahájení služby.',
+          ),
+        ),
+      );
+      return;
+    }
+
     if (inviteEmail == _c['me_email']!.text.trim().toLowerCase()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('E-mail druhé strany musí být odlišný od vašeho e-mailu.')),
@@ -545,7 +557,7 @@ Smluvní strany potvrzují, že si text přečetly, jeho obsahu rozumějí a mě
                 value: _consumerOrderer,
                 onChanged: (v) => setState(() => _consumerOrderer = v),
                 title: const Text('Objednatel jedná jako spotřebitel'),
-                subtitle: const Text('Zaškrtněte, pokud objednatel jedná mimo rámec podnikání nebo povolání.'),
+                subtitle: const Text('Spotřebitelská verze se připravuje. Dokud nejsou doplněny povinné informace a poučení, aplikace takovou smlouvu neodešle.'),
               ),
             ]),
             _section('2. Rozsah díla a místo', [
