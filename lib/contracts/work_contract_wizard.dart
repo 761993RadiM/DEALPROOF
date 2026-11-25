@@ -341,7 +341,9 @@ Popis materiálu a ujednání o jeho zajištění:
 ${_c['materials_description']!.text.trim()}
 Materiál zajišťuje: ${_materialProvider == 'zhotovitel' ? 'zhotovitel' : 'objednatel'}.
 
-Objednatel umožní přístup na místo plnění v dohodnutých termínech a poskytne informace a součinnost potřebnou k provedení díla. Strany si bez zbytečného odkladu oznámí okolnosti, které mohou ovlivnit rozsah, cenu nebo termín. Zhotovitel upozorní na nevhodný materiál nebo pokyn v rozsahu stanoveném právními předpisy; případný pokyn objednatele trvat na takovém postupu bude zachycen písemně.\n\nObjednatel má právo kontrolovat provádění díla v rozsahu odpovídajícím povaze díla. Zjistí-li porušení povinností zhotovitele, může požadovat nápravu; další práva včetně odstoupení se řídí § 2593 občanského zákoníku. Kontrola nesmí bezdůvodně narušovat postup prací.
+Objednatel umožní přístup na místo plnění v dohodnutých termínech a poskytne informace a součinnost potřebnou k provedení díla. Strany si bez zbytečného odkladu oznámí okolnosti, které mohou ovlivnit rozsah, cenu nebo termín. Zhotovitel upozorní na nevhodný materiál nebo pokyn v rozsahu stanoveném právními předpisy; případný pokyn objednatele trvat na takovém postupu bude zachycen písemně.
+
+Objednatel má právo kontrolovat provádění díla v rozsahu odpovídajícím povaze díla. Zjistí-li porušení povinností zhotovitele, může požadovat nápravu; další práva včetně odstoupení se řídí § 2593 občanského zákoníku. Kontrola nesmí bezdůvodně narušovat postup prací.
 
 IV. TERMÍNY
 Předpokládané zahájení: ${_c['start_date']!.text.trim().isEmpty ? 'bude upřesněno písemnou dohodou' : _c['start_date']!.text.trim()}
