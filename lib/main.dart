@@ -220,8 +220,16 @@ class _DealState extends State<DealPage>{
             child: const Text('Zrušit'),
           ),
           FilledButton(
-            onPressed: acceptedExactTerms && name.text.trim().isNotEmpty && !pen.isEmpty
-                ? () => Navigator.pop(dialogContext, true)
+            onPressed: acceptedExactTerms
+                ? () {
+                    if (name.text.trim().isEmpty || pen.isEmpty) {
+                      ScaffoldMessenger.of(dialogContext).showSnackBar(
+                        const SnackBar(content: Text('Doplň jméno a nakresli podpis.')),
+                      );
+                      return;
+                    }
+                    Navigator.pop(dialogContext, true);
+                  }
                 : null,
             child: const Text('Potvrdit znění a podepsat'),
           ),
