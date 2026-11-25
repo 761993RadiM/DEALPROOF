@@ -401,6 +401,17 @@ Smluvní strany potvrzují, že si text přečetly, jeho obsahu rozumějí a mě
       return;
     }
 
+    DateTime toDate(String value) {
+      final parts = value.split('.');
+      return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+    }
+    if (toDate(_c['start_date']!.text.trim()).isAfter(toDate(_c['completion_date']!.text.trim()))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Termín zahájení nesmí být později než termín dokončení.')),
+      );
+      return;
+    }
+
     for (var i = 0; i < _items.length; i++) {
       final item = _items[i];
       if (item.description.text.trim().isEmpty ||
