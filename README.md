@@ -1,29 +1,55 @@
 # DEALPROOF
 
-Android-first application for recording agreements between two people.
+Android-first application for recording agreements between two parties.
 
-## Current implementation
+## What is implemented
 
-- Email/password accounts through Supabase Auth.
-- Cloud-stored agreements visible to their participants.
-- Invite code and QR code for the second participant.
-- Separate user accounts and signatures drawn on screen.
-- Signature records include signer identity, timestamp and SHA-256 fingerprint of the agreed terms.
-- Amendment proposals are separate from the original agreement; the other participant can accept or reject them.
+- Supabase email/password accounts and cloud-stored agreements.
+- One structured Czech contract-for-work (`smlouva o dílo`) wizard.
+- Identification of both parties, roles, address and business identifiers.
+- Detailed work scope, location, quality, materials, dates, itemized prices, VAT mode, payment schedule, handover and defect handling.
+- Review of the complete contract text before sending it to the other party.
+- Immutable version 1 snapshot and SHA-256 fingerprint over the contract text, structured data and itemized budget.
+- Two-party in-app confirmation records with signer identity, timestamp and drawn signature image.
+- Separate amendment proposals; the original agreement text is not edited by an amendment.
+- PDF export with Czech-capable Noto Sans font, budget lines, signature images, timestamps and SHA-256 fingerprint.
 
-A drawn signature and in-app confirmation are evidence records, not automatically a qualified electronic signature. Do not represent the app as guaranteeing legal enforceability.
+Only the work-contract template is currently offered. Other contract types are not advertised as available until they are separately prepared and tested.
 
-## Cloud setup required before connected use
+## Legal and electronic-signature limits
 
-1. Create a Supabase project.
-2. Open SQL Editor and run `supabase/migrations/202611200001_initial_schema.sql`.
-3. In the GitHub repository, add Actions repository secrets:
-   - `SUPABASE_URL`: Project URL from Supabase Project Settings → API.
-   - `SUPABASE_ANON_KEY`: publishable/anon client key from the same page.
-4. Run the **Build Android APK** workflow again.
+The current work-contract form is a structured draft based on the Czech Civil Code. It is not represented as an attorney-reviewed legal opinion or a guarantee of enforceability. A qualified Czech lawyer should review the template before public commercial release.
 
-Never put a Supabase service-role key in the Android app or GitHub build arguments. Only the public anon/publishable key belongs in the client; access is controlled by database row-level security.
+Consumer contracts are deliberately blocked in this version. The separate consumer information, distance/off-premises contracting and withdrawal workflow has not yet been completed.
 
-## Build
+An in-app drawn signature and a confirmation record are evidence of the parties' actions; they are not automatically a qualified electronic signature under eIDAS. The PDF export is a copy of stored content and evidence records, not a legal certification.
 
-GitHub Actions builds the Android APK. The app cannot connect to a cloud backend until the setup above is completed.
+## Database migrations
+
+Migrations are stored in `supabase/migrations` and use the same version identifiers recorded in the connected Supabase project. For a new, empty Supabase project, apply all files in ascending filename order:
+
+1. `20261124083105_live_schema_alignment.sql` — foundational tables, RLS and invitation/signature workflow.
+2. `20261125220529_work_contract_snapshots.sql` — structured contract fields and immutable version snapshots.
+3. `20261125220853_private_rls_helpers.sql` — moves internal RLS helper functions to the private schema.
+4. `20261125221149_harden_work_contract_creation.sql` — validates creation server-side and blocks direct client writes to core contract tables.
+5. `20261125221228_private_contract_creation_rpc.sql` — exposes a public invoker wrapper for the private creation transaction.
+
+Do not run just one of these files on a blank database. They form one ordered setup. The connected production project already has these migrations recorded as applied.
+
+## Supabase Auth configuration
+
+- Keep the Supabase **Site URL** as a valid HTTPS website URL; do not set it to a custom app scheme.
+- Add `dealproof://login-callback` to the Auth redirect URL allowlist.
+- Configure a production SMTP sender before relying on confirmation and invitation emails. The app currently creates the pending invitation in the database and opens the Android share sheet; it does not itself send an email.
+- Enable leaked-password protection in Supabase Auth → Password Security.
+
+## Android build
+
+GitHub Actions builds the Android APK. Required GitHub repository Actions secrets:
+
+- `SUPABASE_URL`: the Supabase project URL.
+- `SUPABASE_ANON_KEY`: the public publishable/anon client key.
+
+Never put a Supabase service-role key in the Android app or GitHub build arguments. Database access is controlled through row-level security and restricted RPC permissions.
+
+The PDF exporter downloads and caches the Noto Sans font on first use, so the first PDF export needs an internet connection.
