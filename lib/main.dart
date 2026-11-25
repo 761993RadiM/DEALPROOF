@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:signature/signature.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -151,8 +154,135 @@ class _DealState extends State<DealPage>{
  Future<void> sign() async {final n=TextEditingController();final pen=SignatureController(penStrokeWidth:3,penColor:Colors.white,exportBackgroundColor:const Color(0xff202a2d));final ok=await showDialog<bool>(context:context,builder:(c)=>AlertDialog(title:const Text('Podepsat dohodu'),content:SizedBox(width:330,child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:n,decoration:const InputDecoration(labelText:'Jméno')),const SizedBox(height:10),Container(height:150,color:const Color(0xff202a2d),child:Signature(controller:pen,backgroundColor:const Color(0xff202a2d))),TextButton(onPressed:pen.clear,child:const Text('Vymazat podpis')),const Text('Podpis prstem není automaticky kvalifikovaný elektronický podpis.',style:TextStyle(fontSize:12))])),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('Zrušit')),FilledButton(onPressed:()=>Navigator.pop(c,true),child:const Text('Potvrdit'))]));if(ok==true){try{if(n.text.trim().isEmpty||pen.isEmpty)throw Exception('Vyplň jméno a podpis.');final png=await pen.toPngBytes();if(png==null)throw Exception('Podpis nelze zpracovat.');await db.from('agreement_signatures').insert({'agreement_id':id,'signer_id':db.auth.currentUser!.id,'signer_name':n.text.trim(),'signature_png_base64':base64Encode(png),'terms_hash':hash});await refresh();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}}n.dispose();pen.dispose();}
  Future<void> amend() async {final d=TextEditingController(),a=TextEditingController();final ok=await showDialog<bool>(context:context,builder:(c)=>AlertDialog(title:const Text('Návrh dodatku'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:d,decoration:const InputDecoration(labelText:'Co se mění?')),TextField(controller:a,decoration:const InputDecoration(labelText:'Změna ceny'))]),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('Zrušit')),FilledButton(onPressed:()=>Navigator.pop(c,d.text.trim().isNotEmpty),child:const Text('Odeslat'))]));if(ok==true){try{await db.from('amendments').insert({'agreement_id':id,'created_by':db.auth.currentUser!.id,'description':d.text.trim(),'price_delta':double.tryParse(a.text.trim().replaceAll(',','.'))??0,'status':'proposed'});await refresh();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}}d.dispose();a.dispose();}
  Future<void> decide(Map<String,dynamic> x,bool accept) async {try{await db.from('amendment_signatures').insert({'amendment_id':x['id'],'user_id':db.auth.currentUser!.id,'decision':accept?'accepted':'rejected'});await refresh();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}}
+ Future<void> exportPdf() async {
+  try {
+    final regularFont = await PdfGoogleFonts.notoSansRegular();
+    final boldFont = await PdfGoogleFonts.notoSansBold();
+    final document = pw.Document(
+      title: (widget.deal['title'] ?? 'Dohoda DEALPROOF').toString(),
+      author: 'DEALPROOF',
+      subject: 'Dohoda a záznam potvrzení',
+    );
+    final content = (widget.deal['contract_text'] ??
+            widget.deal['description'] ??
+            'Text smlouvy není k dispozici.')
+        .toString();
+    final currency = (widget.deal['currency'] ?? 'CZK').toString();
+    final widgets = <pw.Widget>[
+      pw.Header(
+        level: 0,
+        child: pw.Text(
+          'DEALPROOF — ${(widget.deal['title'] ?? 'Dohoda').toString()}',
+          style: pw.TextStyle(font: boldFont, fontSize: 18),
+        ),
+      ),
+      pw.Text('ID dohody: $id',
+          style: pw.TextStyle(font: regularFont, fontSize: 8, color: PdfColors.grey700)),
+      pw.SizedBox(height: 12),
+      pw.Text(content, style: pw.TextStyle(font: regularFont, fontSize: 9.5, lineSpacing: 2)),
+      pw.SizedBox(height: 18),
+      pw.Header(level: 1, child: pw.Text('Položkový rozpočet', style: pw.TextStyle(font: boldFont))),
+    ];
+
+    if (lineItems.isEmpty) {
+      widgets.add(pw.Text('K dohodě nejsou uloženy žádné samostatné položky.',
+          style: pw.TextStyle(font: regularFont, fontSize: 9)));
+    } else {
+      for (var i = 0; i < lineItems.length; i++) {
+        final item = lineItems[i];
+        final quantity = (item['quantity'] as num?) ?? 1;
+        final unitPrice = (item['unit_price'] as num?) ?? 0;
+        final amount = quantity * unitPrice;
+        widgets.add(pw.Padding(
+          padding: const pw.EdgeInsets.symmetric(vertical: 4),
+          child: pw.Text(
+            '${i + 1}. ${item['description']} — $quantity ${item['unit']} × $unitPrice $currency = ${amount.toStringAsFixed(2)} $currency',
+            style: pw.TextStyle(font: regularFont, fontSize: 9),
+          ),
+        ));
+      }
+    }
+
+    widgets.add(pw.SizedBox(height: 16));
+    widgets.add(pw.Header(
+      level: 1,
+      child: pw.Text('Elektronické potvrzení v aplikaci', style: pw.TextStyle(font: boldFont)),
+    ));
+    widgets.add(pw.Text('Kontrolní otisk znění (SHA-256): $hash',
+        style: pw.TextStyle(font: regularFont, fontSize: 8)));
+    widgets.add(pw.SizedBox(height: 8));
+
+    if (signatures.isEmpty) {
+      widgets.add(pw.Text('K této dohodě zatím není uložen žádný podpis.',
+          style: pw.TextStyle(font: regularFont, fontSize: 9)));
+    } else {
+      for (final signature in signatures) {
+        final signerName = (signature['signer_name'] ?? 'Podepisující').toString();
+        final signedAtRaw = signature['signed_at']?.toString() ?? '';
+        final signedAt = DateTime.tryParse(signedAtRaw)?.toLocal();
+        final signedAtText = signedAt == null
+            ? signedAtRaw
+            : '${signedAt.day.toString().padLeft(2, '0')}.${signedAt.month.toString().padLeft(2, '0')}.${signedAt.year} ${signedAt.hour.toString().padLeft(2, '0')}:${signedAt.minute.toString().padLeft(2, '0')}';
+        widgets.add(pw.Container(
+          margin: const pw.EdgeInsets.only(bottom: 12),
+          padding: const pw.EdgeInsets.all(8),
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(signerName, style: pw.TextStyle(font: boldFont, fontSize: 10)),
+              pw.Text('Potvrzeno: $signedAtText',
+                  style: pw.TextStyle(font: regularFont, fontSize: 8)),
+              if ((signature['signature_png_base64'] ?? '').toString().isNotEmpty)
+                pw.Padding(
+                  padding: const pw.EdgeInsets.only(top: 5),
+                  child: pw.Image(
+                    pw.MemoryImage(base64Decode(signature['signature_png_base64'].toString())),
+                    height: 42,
+                    fit: pw.BoxFit.contain,
+                  ),
+                ),
+            ],
+          ),
+        ));
+      }
+    }
+
+    widgets.add(pw.SizedBox(height: 10));
+    widgets.add(pw.Text(
+      'Poznámka: Tento dokument je exportem obsahu a záznamů uložených v aplikaci DEALPROOF. Potvrzení prstem ani tento export samy o sobě nepředstavují kvalifikovaný elektronický podpis.',
+      style: pw.TextStyle(font: regularFont, fontSize: 8, color: PdfColors.grey700),
+    ));
+
+    document.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.fromLTRB(38, 36, 38, 42),
+      theme: pw.ThemeData.withFont(base: regularFont, bold: boldFont),
+      footer: (context) => pw.Align(
+        alignment: pw.Alignment.centerRight,
+        child: pw.Text('Strana ${context.pageNumber} / ${context.pagesCount}',
+            style: pw.TextStyle(font: regularFont, fontSize: 8, color: PdfColors.grey600)),
+      ),
+      build: (context) => widgets,
+    ));
+
+    final safeId = id.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '');
+    await Printing.sharePdf(
+      bytes: await document.save(),
+      filename: 'DEALPROOF-${safeId.isEmpty ? 'dohoda' : safeId}.pdf',
+    );
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('PDF se nepodařilo připravit: $e')),
+      );
+    }
+  }
+ }
  Widget section(String title,Widget child)=>Card(child:Padding(padding:const EdgeInsets.all(15),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:const TextStyle(fontWeight:FontWeight.bold,fontSize:16)),const SizedBox(height:10),child])));
- @override Widget build(BuildContext c){final me=db.auth.currentUser!.id;return Scaffold(appBar:AppBar(title:const Text('Dohoda'),actions:[IconButton(onPressed:invite,icon:const Icon(Icons.qr_code_2))]),floatingActionButton:FloatingActionButton.extended(onPressed:amend,icon:const Icon(Icons.edit_note),label:const Text('Dodatek')),body:ListView(padding:const EdgeInsets.all(14),children:[
+ @override Widget build(BuildContext c){final me=db.auth.currentUser!.id;return Scaffold(appBar:AppBar(title:const Text('Dohoda'),actions:[IconButton(tooltip:'Exportovat do PDF',onPressed:exportPdf,icon:const Icon(Icons.picture_as_pdf)),IconButton(onPressed:invite,icon:const Icon(Icons.qr_code_2))]),floatingActionButton:FloatingActionButton.extended(onPressed:amend,icon:const Icon(Icons.edit_note),label:const Text('Dodatek')),body:ListView(padding:const EdgeInsets.all(14),children:[
  Text(widget.deal['title']??'',style:const TextStyle(fontSize:23,fontWeight:FontWeight.bold)),
  section('Text smlouvy',Text((widget.deal['contract_text']??widget.deal['description']??'').toString()+'\nStav: '+(widget.deal['status']??'').toString()+'\nMěna: '+(widget.deal['currency']??'CZK').toString())),
  section('Položky dohody',Column(children:[if(lineItems.isEmpty)const Text('Bez položek.'),...lineItems.map((it)=>ListTile(title:Text(it['description']??''),subtitle:Text((it['quantity']??1).toString()+' '+(it['unit']??'ks')+' × '+(it['unit_price']??0).toString()+' '+(widget.deal['currency']??'CZK').toString())))])),
