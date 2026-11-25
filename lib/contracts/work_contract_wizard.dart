@@ -71,6 +71,7 @@ class _WorkContractWizardState extends State<WorkContractWizard> {
   String _materialProvider = 'zhotovitel';
   String _priceMode = 'fixed';
   String _vatMode = 'not_selected';
+  String _warrantyMode = 'none';
   bool _consumerOrderer = false;
   bool _saving = false;
 
@@ -89,7 +90,7 @@ class _WorkContractWizardState extends State<WorkContractWizard> {
       'work_quality', 'work_exclusions', 'materials_description', 'start_date',
       'completion_date', 'payment_schedule', 'payment_method', 'payment_due',
       'handover_place', 'handover_rules', 'defect_contact', 'extra_work',
-      'other_terms', 'contract_date'
+      'warranty_description', 'termination_terms', 'other_terms', 'contract_date'
     ]) {
       _controller(key);
     }
@@ -103,6 +104,8 @@ class _WorkContractWizardState extends State<WorkContractWizard> {
         'Předání bude zaznamenáno v předávacím protokolu s datem, popisem předaného díla a případnými výhradami, vadami a nedodělky. Strany mohou pořídit fotodokumentaci.');
     _controller('defect_contact',
         'Vady a nedodělky budou oznámeny druhé straně bez zbytečného odkladu po jejich zjištění, nejlépe písemně s popisem a fotodokumentací.');
+    _controller('termination_terms',
+        'Každá strana může od smlouvy odstoupit v případech stanovených zákonem nebo touto smlouvou. Odstoupení musí být druhé straně oznámeno prokazatelně. Strany vypořádají již provedené práce, účelně vynaložené náklady, předaný materiál a poskytnutá plnění podle občanského zákoníku.');
     _controller('extra_work',
         'Změna rozsahu, vícepráce, méněpráce, záměna materiálu nebo změna termínu se před provedením zachytí v samostatném dodatku či změnovém listu. Ten uvede popis změny, dopad na cenu a termín a musí být potvrzen oběma stranami. Původní znění dohody se nepřepisuje.');
     _controller('contract_date', _today());
@@ -480,6 +483,8 @@ Smluvní strany potvrzují, že si text přečetly, jeho obsahu rozumějí a mě
         },
         'defects': {'contact': _c['defect_contact']!.text.trim()},
         'change_control': {'rule': _c['extra_work']!.text.trim()},
+        'warranty': {'mode': _warrantyMode, 'description': _c['warranty_description']!.text.trim()},
+        'termination': {'terms': _c['termination_terms']!.text.trim()},
         'consumer_orderer': _consumerOrderer,
         'other_terms': _c['other_terms']!.text.trim(),
       };
@@ -658,11 +663,27 @@ Smluvní strany potvrzují, že si text přečetly, jeho obsahu rozumějí a mě
               _field('handover_rules', 'Předávací protokol, zkoušky a zápis výhrad', required: true, lines: 4),
               _field('defect_contact', 'Jak oznámit vady a komu', required: true, lines: 3),
             ]),
-            _section('7. Změny a vícepráce', [
+            _section('7. Záruka a ukončení smlouvy', [
+              DropdownButtonFormField<String>(
+                value: _warrantyMode,
+                decoration: const InputDecoration(labelText: 'Smluvní záruka za jakost', border: OutlineInputBorder()),
+                items: const [
+                  DropdownMenuItem(value: 'none', child: Text('Záruka se výslovně nesjednává')),
+                  DropdownMenuItem(value: 'agreed', child: Text('Sjednat záruku za jakost')),
+                ],
+                onChanged: (v) => setState(() => _warrantyMode = v ?? _warrantyMode),
+              ),
+              if (_warrantyMode == 'agreed')
+                _field('warranty_description', 'Délka záruky, její rozsah a případné výjimky', required: true, lines: 3,
+                    hint: 'Např. 24 měsíců od předání na hydroizolaci podle přiloženého technického listu.'),
+              _field('termination_terms', 'Odstoupení a vypořádání po ukončení smlouvy', required: true, lines: 4),
+              const Text('Tato ustanovení nesmějí omezit práva, která nelze podle zákona smluvně vyloučit.'),
+            ]),
+            _section('8. Změny a vícepráce', [
               _field('extra_work', 'Postup při změně rozsahu, ceny nebo termínu', required: true, lines: 5),
               const Text('Pravidlo je nastaveno tak, aby se vícepráce neprováděly pouze na základě nejasné ústní domluvy.'),
             ]),
-            _section('8. Závěrečná ustanovení', [
+            _section('9. Závěrečná ustanovení', [
               _field('contract_date', 'Datum vyhotovení (DD.MM.RRRR)', required: true, validator: _dateValidator),
               _field('other_terms', 'Další konkrétní ujednání (nepovinné)', lines: 3),
             ]),
