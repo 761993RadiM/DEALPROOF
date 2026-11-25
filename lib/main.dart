@@ -274,7 +274,7 @@ class _DealState extends State<DealPage>{
   String? validateDate(String? value) {
     final text = (value ?? '').trim();
     if (text.isEmpty) return null;
-    final match = RegExp(r'^(\d{1,2})\.(\d{1,2})\.(\d{4})
+    final match = RegExp(r'^(\d{1,2})\.(\d{1,2})\.(\d{4})$').firstMatch(text);
     if (match == null) return 'Použij formát DD.MM.RRRR.';
     final day = int.parse(match.group(1)!);
     final month = int.parse(match.group(2)!);
