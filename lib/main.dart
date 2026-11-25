@@ -26,7 +26,7 @@ class Gate extends StatelessWidget {
 class LoginPage extends StatefulWidget {const LoginPage({super.key});@override State<LoginPage> createState()=>_LoginState();}
 class _LoginState extends State<LoginPage>{
  final email=TextEditingController(),pass=TextEditingController(),name=TextEditingController();bool signup=false,busy=false;String error='';
- Future<void> submit() async {setState(()=>busy=true);try{final a=Supabase.instance.client.auth;if(signup){final r=await a.signUp(email:email.text.trim(),password:pass.text);if(r.session!=null){try{await Supabase.instance.client.rpc('accept_agreement_invitations');}catch(_){}}if(r.session==null)error='Potvrď registrační e-mail a potom se přihlas.';}else{await a.signInWithPassword(email:email.text.trim(),password:pass.text);try{await Supabase.instance.client.rpc('accept_agreement_invitations');}catch(_){}}}catch(e){
+ Future<void> submit() async {setState(()=>busy=true);try{final a=Supabase.instance.client.auth;if(signup){final r=await a.signUp(email:email.text.trim(),password:pass.text,emailRedirectTo:'dealproof://login-callback');if(r.session!=null){try{await Supabase.instance.client.rpc('accept_agreement_invitations');}catch(_){}}if(r.session==null)error='Potvrď registrační e-mail a potom se přihlas.';}else{await a.signInWithPassword(email:email.text.trim(),password:pass.text);try{await Supabase.instance.client.rpc('accept_agreement_invitations');}catch(_){}}}catch(e){
  error=e.toString();
  final checks=<String>[];
  for(final host in [Uri.parse(supaUrl).host,'example.com']){
