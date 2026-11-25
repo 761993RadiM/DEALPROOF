@@ -55,27 +55,38 @@ class _HomeState extends State<HomePage>{
     ),
   );
   if (draft == null) return;
+
+  dynamic id;
   try {
-    final id = await db.rpc(
+    id = await db.rpc(
       'create_work_agreement_with_invite',
       params: draft.toRpcParams(),
     );
-    await SharePlus.instance.share(
-      ShareParams(
-        text: 'Byl/a jsi pozván/a do smlouvy o dílo v aplikaci DEALPROOF. '
-            'Přihlas se e-mailem ${draft.inviteeEmail}. ID dohody: ${id.toString()}',
-      ),
-    );
     await load();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Smlouva byla vytvořena a odeslána druhé straně.')),
-      );
-    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Smlouva je uložena. Připravuje se pozvánka pro druhou stranu.')),
+    );
   } catch (e) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Smlouvu se nepodařilo vytvořit: ${e.toString()}')),
+      );
+    }
+    return;
+  }
+
+  try {
+    await SharePlus.instance.share(
+      ShareParams(
+        text: 'Pozvánka do smlouvy o dílo v aplikaci DEALPROOF. '
+            'Přihlas se e-mailem ${draft.inviteeEmail}. ID dohody: ${id.toString()}',
+      ),
+    );
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Smlouva je uložena, ale nabídku sdílení pozvánky se nepodařilo otevřít.')),
       );
     }
   }
