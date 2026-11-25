@@ -1,137 +1,196 @@
--- DEALPROOF cloud data model
--- Run this migration in the Supabase SQL Editor.
 
-create extension if not exists pgcrypto;
-
-create table if not exists public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  display_name text not null default '',
-  created_at timestamptz not null default now()
-);
+-- DEALPROOF foundational schema.
+-- Subsequent migrations align constraints, invitation flow, audit snapshots and RLS helpers.
+create extension if not exists pgcrypto with schema extensions;
 
 create table if not exists public.agreements (
   id uuid primary key default gen_random_uuid(),
+  created_by uuid not null references auth.users(id),
   title text not null,
-  description text not null default '',
-  amount text not null default '',
-  owner_id uuid not null references auth.users(id),
-  invite_code uuid not null unique default gen_random_uuid(),
-  status text not null default 'open' check (status in ('open','completed','cancelled')),
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  description text,
+  currency text not null default 'CZK',
+  status text not null default 'draft'
+    check (status in ('draft','shared','accepted','rejected')),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.agreement_items (
+  id uuid primary key default gen_random_uuid(),
+  agreement_id uuid not null references public.agreements(id) on delete cascade,
+  description text not null,
+  quantity numeric not null default 1 check (quantity > 0),
+  unit text not null default 'ks',
+  unit_price numeric not null default 0 check (unit_price >= 0),
+  created_at timestamptz not null default now()
 );
 
 create table if not exists public.agreement_participants (
-  agreement_id uuid not null references public.agreements(id) on delete cascade,
-  user_id uuid not null references auth.users(id) on delete cascade,
-  display_name text not null default '',
-  role text not null check (role in ('owner','counterparty')),
-  joined_at timestamptz not null default now(),
-  primary key (agreement_id, user_id)
-);
-
-create table if not exists public.agreement_signatures (
   id uuid primary key default gen_random_uuid(),
   agreement_id uuid not null references public.agreements(id) on delete cascade,
-  signer_id uuid not null references auth.users(id),
-  signer_name text not null,
-  signature_png_base64 text not null,
-  terms_hash text not null,
-  signed_at timestamptz not null default now(),
-  unique (agreement_id, signer_id)
+  user_id uuid references auth.users(id) on delete set null,
+  email text,
+  role text not null default 'participant' check (role in ('owner','participant')),
+  invited_at timestamptz not null default now(),
+  joined_at timestamptz,
+  unique (agreement_id,user_id)
 );
 
 create table if not exists public.amendments (
   id uuid primary key default gen_random_uuid(),
   agreement_id uuid not null references public.agreements(id) on delete cascade,
-  proposer_id uuid not null references auth.users(id),
+  created_by uuid not null references auth.users(id),
   description text not null,
-  amount_change text not null default '',
-  status text not null default 'pending' check (status in ('pending','accepted','rejected')),
-  proposed_at timestamptz not null default now(),
-  decided_at timestamptz,
-  decided_by uuid references auth.users(id)
+  price_delta numeric not null default 0,
+  due_date date,
+  status text not null default 'draft'
+    check (status in ('draft','proposed','accepted','rejected')),
+  created_at timestamptz not null default now()
 );
 
-create index if not exists agreement_participants_user_idx on public.agreement_participants(user_id);
-create index if not exists amendments_agreement_idx on public.amendments(agreement_id, proposed_at);
+create table if not exists public.amendment_signatures (
+  id uuid primary key default gen_random_uuid(),
+  amendment_id uuid not null references public.amendments(id) on delete cascade,
+  user_id uuid not null references auth.users(id),
+  decision text not null check (decision in ('accepted','rejected')),
+  signed_at timestamptz not null default now(),
+  unique (amendment_id,user_id)
+);
 
-create or replace function public.is_agreement_participant(target_agreement uuid)
-returns boolean language sql security definer stable set search_path = public
+create index if not exists agreement_items_agreement_idx
+  on public.agreement_items(agreement_id);
+create index if not exists agreement_participants_user_idx
+  on public.agreement_participants(user_id);
+create index if not exists agreements_created_by_idx
+  on public.agreements(created_by);
+create index if not exists amendments_agreement_idx
+  on public.amendments(agreement_id);
+create index if not exists amendments_created_by_idx
+  on public.amendments(created_by);
+create index if not exists amendment_signatures_user_idx
+  on public.amendment_signatures(user_id);
+
+create or replace function public.is_agreement_member(target_id uuid)
+returns boolean
+language sql stable security definer
+set search_path = ''
 as $$
   select exists (
-    select 1 from public.agreement_participants
-    where agreement_id = target_agreement and user_id = auth.uid()
+    select 1 from public.agreements a
+    where a.id = target_id and a.created_by = auth.uid()
+  ) or exists (
+    select 1 from public.agreement_participants p
+    where p.agreement_id = target_id and p.user_id = auth.uid()
   );
 $$;
 
-alter table public.profiles enable row level security;
-alter table public.agreements enable row level security;
-alter table public.agreement_participants enable row level security;
-alter table public.agreement_signatures enable row level security;
-alter table public.amendments enable row level security;
-
-create policy "profiles readable by signed-in users" on public.profiles
-for select to authenticated using (true);
-create policy "users insert own profile" on public.profiles
-for insert to authenticated with check (id = auth.uid());
-create policy "users update own profile" on public.profiles
-for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
-
-create policy "participants read agreements" on public.agreements
-for select to authenticated using (public.is_agreement_participant(id));
-create policy "signed-in users create agreements" on public.agreements
-for insert to authenticated with check (owner_id = auth.uid());
--- Agreements are intentionally not editable after creation; changes must be proposed as amendments.
-
-create policy "participants read membership" on public.agreement_participants
-for select to authenticated using (public.is_agreement_participant(agreement_id));
-drop policy if exists "owner adds self as participant" on public.agreement_participants;
-create policy "owner adds self as participant" on public.agreement_participants
-for insert to authenticated with check (
-  user_id = auth.uid()
-  and role = 'owner'
-  and exists (
-    select 1 from public.agreements a
-    where a.id = agreement_id and a.owner_id = auth.uid()
-  )
-);
-
--- Joining by invite code is performed through this controlled RPC.
-create or replace function public.join_agreement_by_code(code uuid, participant_name text default '')
-returns uuid language plpgsql security definer set search_path = public
+create or replace function public.is_agreement_owner(target_id uuid)
+returns boolean
+language sql stable security definer
+set search_path = ''
 as $$
-declare target_id uuid;
+  select exists (
+    select 1 from public.agreements a
+    where a.id = target_id and a.created_by = auth.uid()
+  );
+$$;
+
+create or replace function public.is_agreement_draft(target_id uuid)
+returns boolean
+language sql stable security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.agreements a
+    where a.id = target_id
+      and a.created_by = auth.uid()
+      and a.status = 'draft'
+  );
+$$;
+
+revoke all on function public.is_agreement_member(uuid) from public,anon;
+revoke all on function public.is_agreement_owner(uuid) from public,anon;
+revoke all on function public.is_agreement_draft(uuid) from public,anon;
+grant execute on function public.is_agreement_member(uuid) to authenticated;
+grant execute on function public.is_agreement_owner(uuid) to authenticated;
+grant execute on function public.is_agreement_draft(uuid) to authenticated;
+
+create or replace function public.add_agreement_owner()
+returns trigger
+language plpgsql security definer
+set search_path = ''
+as $$
 begin
-  if auth.uid() is null then raise exception 'Přihlášení je povinné'; end if;
-  select id into target_id from public.agreements where invite_code = code;
-  if target_id is null then raise exception 'Pozvánka nebyla nalezena'; end if;
-  insert into public.agreement_participants(agreement_id,user_id,display_name,role)
-  values(target_id,auth.uid(),coalesce(participant_name,''),'counterparty')
-  on conflict (agreement_id,user_id) do nothing;
-  return target_id;
+  insert into public.agreement_participants(agreement_id,user_id,role,joined_at)
+  values(new.id,new.created_by,'owner',pg_catalog.now());
+  return new;
 end;
 $$;
-grant execute on function public.join_agreement_by_code(uuid,text) to authenticated;
+revoke all on function public.add_agreement_owner() from public,anon,authenticated;
 
-create policy "participants read signatures" on public.agreement_signatures
-for select to authenticated using (public.is_agreement_participant(agreement_id));
-create policy "participants sign once" on public.agreement_signatures
-for insert to authenticated with check (
-  signer_id = auth.uid() and public.is_agreement_participant(agreement_id)
-);
+drop trigger if exists agreement_owner_trigger on public.agreements;
+create trigger agreement_owner_trigger
+after insert on public.agreements
+for each row execute function public.add_agreement_owner();
 
-create policy "participants read amendments" on public.amendments
-for select to authenticated using (public.is_agreement_participant(agreement_id));
-create policy "participants propose amendments" on public.amendments
-for insert to authenticated with check (
-  proposer_id = auth.uid() and public.is_agreement_participant(agreement_id)
-);
-create policy "other participant decides amendments" on public.amendments
-for update to authenticated using (
-  public.is_agreement_participant(agreement_id) and proposer_id <> auth.uid()
-) with check (
-  public.is_agreement_participant(agreement_id) and decided_by = auth.uid()
-);
+alter table public.agreements enable row level security;
+alter table public.agreement_items enable row level security;
+alter table public.agreement_participants enable row level security;
+alter table public.amendments enable row level security;
+alter table public.amendment_signatures enable row level security;
 
--- Immutable signatures: no update or delete policies are intentionally provided.
+grant select,insert,update,delete on public.agreements to authenticated;
+grant select,insert,update,delete on public.agreement_items to authenticated;
+grant select,insert,update,delete on public.agreement_participants to authenticated;
+grant select,insert,update,delete on public.amendments to authenticated;
+grant select,insert,update,delete on public.amendment_signatures to authenticated;
+
+drop policy if exists agreement_select on public.agreements;
+create policy agreement_select on public.agreements
+for select to authenticated using (public.is_agreement_member(id));
+drop policy if exists agreement_insert on public.agreements;
+create policy agreement_insert on public.agreements
+for insert to authenticated with check (created_by = (select auth.uid()));
+drop policy if exists agreement_delete on public.agreements;
+create policy agreement_delete on public.agreements
+for delete to authenticated using (created_by = (select auth.uid()) and status='draft');
+drop policy if exists agreement_update on public.agreements;
+create policy agreement_update on public.agreements
+for update to authenticated
+using (created_by = (select auth.uid()) and status='draft')
+with check (created_by = (select auth.uid()) and status in ('draft','shared'));
+
+drop policy if exists items_select on public.agreement_items;
+create policy items_select on public.agreement_items
+for select to authenticated using (public.is_agreement_member(agreement_id));
+drop policy if exists items_insert on public.agreement_items;
+create policy items_insert on public.agreement_items
+for insert to authenticated with check (public.is_agreement_draft(agreement_id));
+drop policy if exists items_update on public.agreement_items;
+create policy items_update on public.agreement_items
+for update to authenticated
+using (public.is_agreement_draft(agreement_id))
+with check (public.is_agreement_draft(agreement_id));
+drop policy if exists items_delete on public.agreement_items;
+create policy items_delete on public.agreement_items
+for delete to authenticated using (public.is_agreement_draft(agreement_id));
+
+drop policy if exists participants_select on public.agreement_participants;
+create policy participants_select on public.agreement_participants
+for select to authenticated using (public.is_agreement_member(agreement_id));
+
+drop policy if exists amendments_select on public.amendments;
+create policy amendments_select on public.amendments
+for select to authenticated using (public.is_agreement_member(agreement_id));
+drop policy if exists amendments_insert on public.amendments;
+create policy amendments_insert on public.amendments
+for insert to authenticated
+with check (
+  created_by=(select auth.uid())
+  and status='proposed'
+  and public.is_agreement_member(agreement_id)
+);
+drop policy if exists amendments_update on public.amendments;
+create policy amendments_update on public.amendments
+for update to authenticated
+using (created_by=(select auth.uid()) and status='draft')
+with check (created_by=(select auth.uid()) and status in ('draft','proposed'));
