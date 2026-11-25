@@ -27,6 +27,21 @@ jobs:
           cache: true
       - name: Generate Android project files
         run: flutter create --platforms=android --project-name dealproof .
+      - name: Ensure Android internet permission
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("android/app/src/main/AndroidManifest.xml")
+          manifest = path.read_text()
+          permission = '    <uses-permission android:name="android.permission.INTERNET"/>\n'
+          if "android.permission.INTERNET" not in manifest:
+              end = manifest.find(">")
+              if end < 0:
+                  raise SystemExit("Invalid AndroidManifest.xml")
+              manifest = manifest[:end + 1] + "\n" + permission + manifest[end + 1:]
+              path.write_text(manifest)
+          print("Android INTERNET permission verified.")
+          PY
       - name: Install dependencies
         run: flutter pub get
       - name: Check Dart code
