@@ -50,7 +50,7 @@ jobs:
           path = Path("android/app/src/main/AndroidManifest.xml")
           manifest = path.read_text()
           if 'android:scheme="dealproof"' not in manifest:
-              activity = re.search(r'(<activity\\b[^>]*android:name="[^"]*MainActivity"[^>]*>)([\\s\\S]*?)(</activity>)', manifest)
+              activity = re.search(r'(<activity\b[^>]*android:name="[^"]*MainActivity"[^>]*>)([\s\\S]*?)(</activity>)', manifest)
               if not activity:
                   raise SystemExit("MainActivity not found in AndroidManifest.xml")
               intent = """
