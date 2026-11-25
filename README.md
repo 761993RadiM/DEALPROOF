@@ -33,6 +33,7 @@ Migrations are stored in `supabase/migrations` and use the same version identifi
 3. `20261125220853_private_rls_helpers.sql` — moves internal RLS helper functions to the private schema.
 4. `20261125221149_harden_work_contract_creation.sql` — validates creation server-side and blocks direct client writes to core contract tables.
 5. `20261125221228_private_contract_creation_rpc.sql` — exposes a public invoker wrapper for the private creation transaction.
+6. `20261125221800_work_contract_warranty_termination.sql` — requires explicit warranty selection and termination/settlement terms for every new work contract.
 
 Do not run just one of these files on a blank database. They form one ordered setup. The connected production project already has these migrations recorded as applied.
 
