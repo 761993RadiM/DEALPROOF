@@ -446,7 +446,7 @@ class _DealState extends State<DealPage>{
       level: 1,
       child: pw.Text('Elektronické potvrzení v aplikaci', style: pw.TextStyle(font: boldFont)),
     ));
-    widgets.add(pw.Text('Kontrolní otisk znění (SHA-256): $hash',
+    widgets.add(pw.Text('Kontrolní otisk obsahu smlouvy a položek (SHA-256): $hash',
         style: pw.TextStyle(font: regularFont, fontSize: 8)));
     widgets.add(pw.SizedBox(height: 8));
 
@@ -482,6 +482,84 @@ class _DealState extends State<DealPage>{
                     fit: pw.BoxFit.contain,
                   ),
                 ),
+            ],
+          ),
+        ));
+      }
+    }
+
+    widgets.add(pw.SizedBox(height: 18));
+    widgets.add(pw.Header(
+      level: 1,
+      child: pw.Text('Historie dodatků a změn', style: pw.TextStyle(font: boldFont)),
+    ));
+
+    if (amendments.isEmpty) {
+      widgets.add(pw.Text('K této dohodě nebyl vytvořen žádný dodatek.',
+          style: pw.TextStyle(font: regularFont, fontSize: 9)));
+    } else {
+      final amendmentIds = amendments.map((item) => item['id'].toString()).toList();
+      final amendmentSignatures = await db
+          .from('amendment_signatures')
+          .select()
+          .inFilter('amendment_id', amendmentIds);
+
+      for (var i = 0; i < amendments.length; i++) {
+        final amendment = amendments[i];
+        final amendmentId = amendment['id'].toString();
+        final status = (amendment['status'] ?? 'unknown').toString();
+        final statusLabel = switch (status) {
+          'proposed' => 'Čeká na potvrzení druhé strany',
+          'accepted' => 'Potvrzeno oběma stranami',
+          'rejected' => 'Odmítnuto',
+          'draft' => 'Rozpracováno',
+          _ => status,
+        };
+        final delta = (amendment['price_delta'] as num?) ?? 0;
+        final dateRaw = amendment['due_date']?.toString();
+        final createdRaw = amendment['created_at']?.toString() ?? '';
+        final createdAt = DateTime.tryParse(createdRaw)?.toLocal();
+        final createdText = createdAt == null
+            ? createdRaw
+            : '${createdAt.day.toString().padLeft(2, '0')}.${createdAt.month.toString().padLeft(2, '0')}.${createdAt.year} ${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}';
+        widgets.add(pw.Container(
+          margin: const pw.EdgeInsets.only(bottom: 10),
+          padding: const pw.EdgeInsets.all(9),
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text('Dodatek ${i + 1} — $statusLabel',
+                  style: pw.TextStyle(font: boldFont, fontSize: 10)),
+              pw.SizedBox(height: 4),
+              pw.Text((amendment['description'] ?? '').toString(),
+                  style: pw.TextStyle(font: regularFont, fontSize: 9)),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                'Změna ceny: ${delta >= 0 ? '+' : ''}${delta.toStringAsFixed(2)} $currency',
+                style: pw.TextStyle(font: regularFont, fontSize: 9),
+              ),
+              pw.Text(
+                dateRaw == null ? 'Termín dokončení beze změny' : 'Nový termín dokončení: $dateRaw',
+                style: pw.TextStyle(font: regularFont, fontSize: 9),
+              ),
+              pw.Text('Navrženo: $createdText',
+                  style: pw.TextStyle(font: regularFont, fontSize: 8, color: PdfColors.grey700)),
+              ...((amendmentSignatures as List)
+                  .where((signature) => signature['amendment_id'].toString() == amendmentId)
+                  .map((signature) {
+                final signedAtRaw = signature['signed_at']?.toString() ?? '';
+                final signedAt = DateTime.tryParse(signedAtRaw)?.toLocal();
+                final signedAtText = signedAt == null
+                    ? signedAtRaw
+                    : '${signedAt.day.toString().padLeft(2, '0')}.${signedAt.month.toString().padLeft(2, '0')}.${signedAt.year} ${signedAt.hour.toString().padLeft(2, '0')}:${signedAt.minute.toString().padLeft(2, '0')}';
+                return pw.Text(
+                  'Rozhodnutí uživatele ${signature['user_id']}: ${signature['decision']} — $signedAtText',
+                  style: pw.TextStyle(font: regularFont, fontSize: 8),
+                );
+              })),
             ],
           ),
         ));
@@ -525,6 +603,6 @@ class _DealState extends State<DealPage>{
  section('Text smlouvy',Text((widget.deal['contract_text']??widget.deal['description']??'').toString()+'\nStav: '+(widget.deal['status']??'').toString()+'\nMěna: '+(widget.deal['currency']??'CZK').toString())),
  section('Položky dohody',Column(children:[if(lineItems.isEmpty)const Text('Bez položek.'),...lineItems.map((it)=>ListTile(title:Text(it['description']??''),subtitle:Text((it['quantity']??1).toString()+' '+(it['unit']??'ks')+' × '+(it['unit_price']??0).toString()+' '+(widget.deal['currency']??'CZK').toString())))])),
  section('Podpisy ('+signatures.length.toString()+'/2)',Column(children:[if(loading)const LinearProgressIndicator(),...signatures.map((s)=>ListTile(title:Text(s['signer_name']??''),subtitle:Text('Podepsáno: '+s['signed_at'].toString()))),if(signatures.isEmpty)const Text('Zatím nikdo nepodepsal.'),if(!signatures.any((s)=>s['signer_id']==me))FilledButton.icon(onPressed:sign,icon:const Icon(Icons.draw),label:const Text('Zkontrolovat a podepsat'))])),
- section('Dodatky – původní dohoda se nepřepisuje',Column(children:[if(amendments.isEmpty)const Text('Zatím žádné dodatky.'),...amendments.map((x){final mine=x['created_by']==me;final pending=x['status']=='proposed';return ListTile(title:Text(x['description']),subtitle:Text('Změna ceny: '+(x['price_delta']??0).toString()+' • '+x['status'].toString()),trailing:pending&&!mine?Wrap(children:[IconButton(onPressed:()=>decide(x,true),icon:const Icon(Icons.check,color:Colors.green)),IconButton(onPressed:()=>decide(x,false),icon:const Icon(Icons.close,color:Colors.red))]):null);})])),
+ section('Dodatky – původní dohoda se nepřepisuje',Column(children:[if(amendments.isEmpty)const Text('Zatím žádné dodatky.'),...amendments.map((x){final mine=x['created_by']==me;final pending=x['status']=='proposed';return ListTile(title:Text(x['description']),subtitle:Text('Změna ceny: '+(x['price_delta']??0).toString()+' Kč • '+(x['due_date']==null?'Termín beze změny':'Nový termín: '+x['due_date'].toString())+' • '+x['status'].toString()),trailing:pending&&!mine?Wrap(children:[IconButton(onPressed:()=>decide(x,true),icon:const Icon(Icons.check,color:Colors.green)),IconButton(onPressed:()=>decide(x,false),icon:const Icon(Icons.close,color:Colors.red))]):null);})])),
  ]));}
 }
