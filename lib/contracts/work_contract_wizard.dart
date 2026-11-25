@@ -70,7 +70,7 @@ class _WorkContractWizardState extends State<WorkContractWizard> {
   String _creatorRole = 'zhotovitel';
   String _materialProvider = 'zhotovitel';
   String _priceMode = 'fixed';
-  String _vatMode = 'not_payer';
+  String _vatMode = 'not_selected';
   bool _consumerOrderer = false;
   bool _saving = false;
 
@@ -94,7 +94,7 @@ class _WorkContractWizardState extends State<WorkContractWizard> {
       _controller(key);
     }
     _controller('payment_schedule',
-        'Záloha: [doplňte částku a splatnost]. Doplatek po předání díla.');
+        'Záloha se nepožaduje. Cena bude uhrazena po řádném předání díla na základě faktury.');
     _controller('payment_method',
         'Bankovním převodem na účet zhotovitele uvedený na faktuře, případně hotově proti potvrzení.');
     _controller('payment_due', '14 kalendářních dnů ode dne doručení faktury');
@@ -136,7 +136,7 @@ class _WorkContractWizardState extends State<WorkContractWizard> {
   }
 
   String? _dateValidator(String? value) {
-    if (value == null || value.trim().isEmpty) return null;
+    if (value == null || value.trim().isEmpty) return 'Datum je povinné.';
     final match = RegExp(r'^(\d{1,2})\.(\d{1,2})\.(\d{4})$').firstMatch(value.trim());
     if (match == null) return 'Použij formát DD.MM.RRRR.';
     final day = int.parse(match.group(1)!);
@@ -271,7 +271,8 @@ class _WorkContractWizardState extends State<WorkContractWizard> {
     final vat = switch (_vatMode) {
       'included' => 'Ceny položek jsou uvedeny včetně DPH.',
       'extra' => 'DPH bude k uvedeným cenám připočtena v zákonné sazbě, je-li zhotovitel povinen ji uplatnit.',
-      _ => 'Zhotovitel prohlašuje, že není plátcem DPH; DPH se k ceně nepřipočítává.',
+      'not_payer' => 'Zhotovitel prohlašuje, že není plátcem DPH; DPH se k ceně nepřipočítává.',
+      _ => 'Režim DPH nebyl vybrán.',
     };
     String party(Map<String, dynamic> p) {
       final company = p['type'] == 'company';
@@ -460,7 +461,7 @@ Smluvní strany potvrzují, že si text přečetly, jeho obsahu rozumějí a mě
         'other_terms': _c['other_terms']!.text.trim(),
       };
       final draft = WorkContractDraft(
-        title: 'Smlouva o dílo – ${_c['work_location']!.text.trim()}',
+        title: 'Smlouva o dílo',
         inviteeEmail: inviteEmail,
         description: contractText,
         contractText: contractText,
@@ -468,7 +469,25 @@ Smluvní strany potvrzují, že si text přečetly, jeho obsahu rozumějí a mě
         items: items,
         currency: 'CZK',
       );
-      if (mounted) Navigator.of(context).pop(draft);
+      if (_vatMode == 'not_selected') {
+        throw StateError('Vyber, jak bude ve smlouvě řešena DPH.');
+      }
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Kontrola smlouvy o dílo'),
+          content: SizedBox(
+            width: 560,
+            height: MediaQuery.of(dialogContext).size.height * 0.62,
+            child: SingleChildScrollView(child: SelectableText(contractText)),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Zpět upravit')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Potvrdit znění a pokračovat')),
+          ],
+        ),
+      );
+      if (confirmed == true && mounted) Navigator.of(context).pop(draft);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -555,7 +574,9 @@ Smluvní strany potvrzují, že si text přečetly, jeho obsahu rozumějí a mě
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: _vatMode,
+                value: _vatMode == 'not_selected' ? null : _vatMode,
+                hint: const Text('Vyber režim DPH'),
+                validator: (v) => v == null ? 'Vyber režim DPH.' : null,
                 decoration: const InputDecoration(labelText: 'DPH', border: OutlineInputBorder()),
                 items: const [
                   DropdownMenuItem(value: 'not_payer', child: Text('Zhotovitel není plátcem DPH')),
