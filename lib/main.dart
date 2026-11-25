@@ -126,7 +126,7 @@ class _HomeState extends State<HomePage>{
      const SizedBox(height:10),
      const Text('Zatím tu žádná dohoda není',style:TextStyle(fontWeight:FontWeight.bold,fontSize:16)),
      const SizedBox(height:6),
-     const Text('Začni výběrem vzoru. Připravili jsme smlouvu o dílo, kupní smlouvu, zápůjčku, nájemní dohodu i vlastní vzor.',textAlign:TextAlign.center),
+     const Text('Začni vytvořením smlouvy o dílo. Další právní vzory přidáme až po samostatném zpracování a kontrole.',textAlign:TextAlign.center),
      const SizedBox(height:12),
      FilledButton.icon(onPressed:create,icon:const Icon(Icons.auto_awesome),label:const Text('Vybrat vzor a začít'))
     ]))),
