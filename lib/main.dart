@@ -58,7 +58,52 @@ class _HomeState extends State<HomePage>{
  if(selected==null)return;
  final t=TextEditingController(text:selected['title']),d=TextEditingController(text:selected['description']),cur=TextEditingController(text:'CZK'),e=TextEditingController(),item=TextEditingController(text:selected['item']),qty=TextEditingController(text:'1'),unit=TextEditingController(text:'ks'),price=TextEditingController(text:'0');final ok=await showDialog<bool>(context:context,builder:(c)=>AlertDialog(title:const Text('Nová dohoda'),content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:t,decoration:const InputDecoration(labelText:'Název dohody')),TextField(controller:d,decoration:const InputDecoration(labelText:'Podmínky a termín'),minLines:2,maxLines:4),TextField(controller:item,decoration:const InputDecoration(labelText:'Položka práce / služby')),Row(children:[Expanded(child:TextField(controller:qty,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Množství'))),const SizedBox(width:8),Expanded(child:TextField(controller:unit,decoration:const InputDecoration(labelText:'Jednotka')))]),TextField(controller:price,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Cena za jednotku')) ,TextField(controller:cur,decoration:const InputDecoration(labelText:'Měna (CZK)')),TextField(controller:e,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'E-mail druhé osoby'))])),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('Zrušit')),FilledButton(onPressed:()=>Navigator.pop(c,t.text.trim().isNotEmpty&&item.text.trim().isNotEmpty&&e.text.trim().contains('@')),child:const Text('Vytvořit a pozvat'))]));if(ok==true){try{final id=await db.rpc('create_agreement_with_invite',params:{'p_title':t.text.trim(),'p_description':d.text.trim(),'p_currency':cur.text.trim().isEmpty?'CZK':cur.text.trim().toUpperCase(),'p_item_description':item.text.trim(),'p_quantity':double.tryParse(qty.text.replaceAll(',','.'))??1,'p_unit':unit.text.trim().isEmpty?'ks':unit.text.trim(),'p_unit_price':double.tryParse(price.text.replaceAll(',','.'))??0,'p_invitee_email':e.text.trim().toLowerCase()});await SharePlus.instance.share(ShareParams(text:'Byl/a jsi pozván/a do dohody DEALPROOF: '+t.text.trim()+'. Přihlas se v aplikaci stejným e-mailem: '+e.text.trim()+'. ID dohody: '+id.toString()));await load();}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}}for(final x in [t,d,cur,e,item,qty,unit,price]){x.dispose();}}
  Future<void> join() async {try{final r=await db.rpc('accept_agreement_invitations');await load();if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Přijaté pozvánky: '+(r is List?r.length:0).toString())));}catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}}
- @override Widget build(BuildContext c)=>Scaffold(appBar:AppBar(title:const Text('DEALPROOF'),actions:[IconButton(onPressed:join,icon:const Icon(Icons.link)),IconButton(onPressed:()=>db.auth.signOut(),icon:const Icon(Icons.logout))]),floatingActionButton:FloatingActionButton.extended(onPressed:create,icon:const Icon(Icons.add),label:const Text('Nová dohoda')),body:busy?const Center(child:CircularProgressIndicator()):items.isEmpty?const Center(child:Text('Vytvoř dohodu nebo přijmi pozvánku.')):RefreshIndicator(onRefresh:load,child:ListView.builder(itemCount:items.length,itemBuilder:(c,i){final x=items[i];return Card(child:ListTile(title:Text(x['title']??''),subtitle:Text(x['currency']??'CZK'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>DealPage(deal:x))).then((_)=>load())));})));
+ @override Widget build(BuildContext c)=>Scaffold(
+  appBar:AppBar(title:const Text('DEALPROOF'),actions:[
+   IconButton(tooltip:'Přijmout pozvánky',onPressed:join,icon:const Icon(Icons.mark_email_read_outlined)),
+   IconButton(tooltip:'Odhlásit',onPressed:()=>db.auth.signOut(),icon:const Icon(Icons.logout))
+  ]),
+  floatingActionButton:FloatingActionButton.extended(onPressed:create,icon:const Icon(Icons.add),label:const Text('Nová dohoda')),
+  body:busy?const Center(child:CircularProgressIndicator()):RefreshIndicator(
+   onRefresh:load,
+   child:ListView(padding:const EdgeInsets.fromLTRB(16,8,16,100),children:[
+    Container(
+     padding:const EdgeInsets.all(20),
+     decoration:BoxDecoration(borderRadius:BorderRadius.circular(22),gradient:const LinearGradient(colors:[Color(0xff126d68),Color(0xff183d42)],begin:Alignment.topLeft,end:Alignment.bottomRight)),
+     child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      Icon(Icons.verified_user_outlined,size:34,color:Colors.white),
+      SizedBox(height:14),
+      Text('Dohody jasně.\nPodmínky černé na bílém.',style:TextStyle(fontSize:23,fontWeight:FontWeight.bold,color:Colors.white)),
+      SizedBox(height:8),
+      Text('Vytvoř dohodu, pošli ji druhé straně a uchovej si potvrzené znění i všechny dodatky.',style:TextStyle(color:Colors.white70,fontSize:14))
+     ])
+    ),
+    const SizedBox(height:20),
+    Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
+     const Text('Moje dohody',style:TextStyle(fontSize:20,fontWeight:FontWeight.bold)),
+     Text(items.length.toString()+' celkem',style:TextStyle(color:Theme.of(c).colorScheme.secondary))
+    ]),
+    const SizedBox(height:10),
+    if(items.isEmpty)Card(child:Padding(padding:const EdgeInsets.all(20),child:Column(children:[
+     const Icon(Icons.description_outlined,size:42,color:Colors.tealAccent),
+     const SizedBox(height:10),
+     const Text('Zatím tu žádná dohoda není',style:TextStyle(fontWeight:FontWeight.bold,fontSize:16)),
+     const SizedBox(height:6),
+     const Text('Začni výběrem vzoru. Připravili jsme smlouvu o dílo, kupní smlouvu, zápůjčku, nájemní dohodu i vlastní vzor.',textAlign:TextAlign.center),
+     const SizedBox(height:12),
+     FilledButton.icon(onPressed:create,icon:const Icon(Icons.auto_awesome),label:const Text('Vybrat vzor a začít'))
+    ]))),
+    ...items.map((x)=>Card(child:ListTile(
+     contentPadding:const EdgeInsets.symmetric(horizontal:16,vertical:7),
+     leading:CircleAvatar(backgroundColor:Colors.teal.withValues(alpha:.18),child:const Icon(Icons.description_outlined,color:Colors.tealAccent)),
+     title:Text(x['title']??'Bez názvu',style:const TextStyle(fontWeight:FontWeight.w600)),
+     subtitle:Text((x['status']??'').toString()+' • '+(x['currency']??'CZK').toString()),
+     trailing:const Icon(Icons.chevron_right),
+     onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>DealPage(deal:x))).then((_)=>load())
+    )))
+   ])
+  )
+ );
 }
 class DealPage extends StatefulWidget {const DealPage({super.key,required this.deal});final Map<String,dynamic> deal;@override State<DealPage> createState()=>_DealState();}
 class _DealState extends State<DealPage>{
